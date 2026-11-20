@@ -41,7 +41,25 @@ jobs:
       - name: Typecheck and unit tests
         run: devbox run -- make test
 
+      # TEMPORARY (m01-t01 step 6): the first run installed the apt packages successfully and then
+      # failed to launch Firefox and WebKit from inside devbox, naming the same libraries as
+      # missing. This prints what the launcher actually sees, so the fix is chosen on evidence.
+      - name: Diagnose the library view inside and outside devbox
+        shell: bash
+        run: |
+          FF="$HOME/.cache/ms-playwright/firefox-1572/firefox/firefox"
+          echo "--- outside devbox ---"
+          echo "LD_LIBRARY_PATH=[${LD_LIBRARY_PATH:-}]"
+          echo "ldconfig hits: $(ldconfig -p | grep -cE 'libasound[.]so[.]2|libgtk-3[.]so[.]0' || true)"
+          echo "ldd not-found: $(ldd "$FF" 2>&1 | grep -c 'not found' || true)"
+          echo "--- inside devbox ---"
+          devbox run -- bash -c 'echo "LD_LIBRARY_PATH=[$LD_LIBRARY_PATH]"; echo "ldd is $(command -v ldd)"; echo "ldd not-found: $(ldd '"$FF"' 2>&1 | grep -c "not found" || true)"'
+
       - name: Browser tests, three engines
+        env:
+          # The apt packages install fine; it is devbox's view of them that fails Playwright's
+          # pre-launch host check. Skipping the check tests whether the browsers themselves run.
+          PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1"
         run: devbox run -- make e2e ENGINES="chromium firefox webkit"
 
       # Last, so it catches anything the build or the tests wrote into a tracked path.

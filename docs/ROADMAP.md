@@ -12,6 +12,7 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 | M02 — Public deployment | `<contract>.<chain>.<base>` live for the chains rake uses, on static hosting, with the base domain on the Public Suffix List | not started |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through gw44 | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
+| M05 — Names and custom domains | A contract is reachable by name (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`) and from its owner's own domain | not started |
 
 `MILESTONE.md` for M02–M04 is written when the milestone before it is under way. The MVP is M01; M02 is what makes it usable in public.
 
@@ -19,7 +20,9 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 
 M01 first because M02 publishes whatever M01 leaves, and a public gateway origin is hard to take back. M03 follows M02 because both of its options need the public base domain. M03's decision is wanted earlier than its work: see Decisions, D1.
 
-M04 is last because it is the only milestone that is real engineering rather than hardening, and nothing before it depends on it.
+M04 comes after the deployment because it is the only milestone that is real engineering rather than hardening, and nothing before it depends on it.
+
+M05 is last and lower priority, scoped for after the public deployment (direction given 2026-11-20). It follows M04 because a name adds a second lookup to the same endpoints, and it is better added to endpoints that are already checked. Its scoping has three questions to answer before any task is written, listed under Findings carried forward.
 
 ## Decisions
 
@@ -46,6 +49,13 @@ Open. Each becomes a `decision` issue when this roadmap is approved.
 - *Default and deadline.* No cache; nothing waits on it.
 - *Record.* Here.
 
+**D4 — How an owner's own domain reaches their contract.**
+- *Question.* The working assumption is that an owner points a CNAME at their contract's gateway host. On static hosting that does not work by itself; which route does gw44 offer?
+- *Options.* (1) A pinned build: the owner hosts the two files on their own domain, built to serve one contract at any hostname. No server, no dependence on the public gateway; the owner does a deploy rather than a DNS edit. (2) CNAME to the public gateway, with certificates issued on demand by the host. A DNS edit for the owner; a hosting service or a server for the operator, and a DNS lookup in the browser to learn which contract the hostname means. (3) Both.
+- *Recommendation.* The pinned build first: it is the only route that keeps the gateway static, and it removes the operator from the owner's trust. CNAME if a host with on-demand certificates is chosen in M02 anyway.
+- *Default and deadline.* The pinned build, in M05. Blocks M05 only, though the choice of host in M02 decides whether option 2 stays cheap.
+- *Record.* Here.
+
 Closed.
 
 1. **TypeScript, not Rust and WebAssembly** (2026-11-20, from spike 001). The gateway's own work is 1.4 ms beside an RPC round trip of 120–500 ms. Reopened by M04 if proof verification is chosen there.
@@ -53,9 +63,18 @@ Closed.
 3. **The path form is loopback-only.** On a public host it would put every contract in one origin.
 4. **RPC endpoints are compiled in.** Never taken from a URL, and never fetched at run time.
 
+## Findings carried forward
+
+For M05's scoping. None is measured; each is a question, not a design.
+
+- **A CNAME needs a certificate for the owner's hostname.** A static host serves only the names it holds certificates for, so an arbitrary domain pointed at the gateway fails at TLS before any gateway code runs. And the page sees only its own hostname, with no contract in it, so it would have to look the mapping up itself.
+- **A name does not say which chain.** ENS and WNS resolve on mainnet to an address; the contract may live elsewhere. The URL, a record on the name, or a mainnet-only rule has to supply the chain.
+- **A wildcard certificate covers one label.** `<name>.ens.<base>` works for `name.eth`; a subname (`a.b.eth`) needs either an encoding into one label or no support.
+- **A name's origin follows the name, not the contract.** Whoever holds the name can repoint it, and the origin's storage and granted permissions go with it. Same as DNS, and worth saying in `SECURITY.md` when it ships.
+
 ## Not on the roadmap
 
-- **IPFS, ENS and other names, the other `web3://` resolve modes.** Out by the project's definition.
+- **IPFS and the other `web3://` resolve modes.** Out by the project's definition.
 - **A server-side cache of any kind.** It is the failure this project exists to remove.
 - **Chain aliases** (`sep`, `basesep`). A second name for the same origin is a second origin; the chain id is the name.
 - **Compressed `request()` bodies.** Refused with a 502 today. Nothing in scope uses them; add when something does.

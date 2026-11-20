@@ -32,7 +32,8 @@ A working prototype from a spike. It is not deployed anywhere; `gw44` is a worki
 - **Answer another site's `<script src>`.** A service worker serves its own pages only. A third-party page that embeds `https://<contract>.<chain>.<base>/widget.js` gets the page shell, not the script. This is the limit of having no server, and [the roadmap](docs/ROADMAP.md) carries the decision it forces.
 - **Answer `curl`, crawlers or link previews.** They get the shell too. `make get URL=<url>` resolves a gateway URL through the same code without a browser.
 - **Verify the RPC endpoint.** One endpoint's answer is taken as the chain's.
-- Names (ENS or otherwise), IPFS, the other `web3://` resolve modes, compressed `request()` bodies.
+- Names and custom domains yet; they are the roadmap's last milestone.
+- IPFS, the other `web3://` resolve modes, compressed `request()` bodies.
 
 ## Documentation
 

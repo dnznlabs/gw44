@@ -1,0 +1,7 @@
+{
+  "1": ["https://ethereum-rpc.publicnode.com"],
+  "8453": ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
+  "11155111": ["https://ethereum-sepolia-rpc.publicnode.com"],
+  "84532": ["https://base-sepolia-rpc.publicnode.com", "https://sepolia.base.org"],
+  "31337": ["http://127.0.0.1:8545"]
+}

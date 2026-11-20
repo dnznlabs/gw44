@@ -1,0 +1,194 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "git@latest": {
+      "last_modified": "2026-11-19T13:46:25Z",
+      "resolved": "github:NixOS/nixpkgs/19cfded70b91ca0981373973c5b1efffdd4d6647#git",
+      "source": "devbox-search",
+      "version": "2.56.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5gpqd5y6g8wav4sgry5i9qmp0kwnnwby-git-2.56.0",
+              "default": true
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/891py8svml38cqvi5i0wyf99i8mjza53-git-2.56.0-doc"
+            }
+          ],
+          "store_path": "/nix/store/5gpqd5y6g8wav4sgry5i9qmp0kwnnwby-git-2.56.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/6043wra24xi7fhdrw8rg204v31s39nd5-git-2.56.0",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/9lkhd1zvai0mw02aykjqbi730swwx9qd-git-2.56.0-debug"
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/4h2hxpgirh65k9951jk7w7kw5hsrfvcb-git-2.56.0-doc"
+            }
+          ],
+          "store_path": "/nix/store/6043wra24xi7fhdrw8rg204v31s39nd5-git-2.56.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/i2m3w4ly2w6grrmk1j59rb7zp09bssia-git-2.56.0",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/qlbskmnhjz3p6f2iwf5h59r7v8d7dpm6-git-2.56.0-debug"
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/5a7dj71qa2r7k303v4f4j6b6kcdf1mff-git-2.56.0-doc"
+            }
+          ],
+          "store_path": "/nix/store/i2m3w4ly2w6grrmk1j59rb7zp09bssia-git-2.56.0"
+        }
+      }
+    },
+    "github:NixOS/nixpkgs/nixpkgs-unstable": {
+      "last_modified": "2026-10-29T23:18:20Z",
+      "resolved": "github:NixOS/nixpkgs/db379a58acfef9783b46ffde2957dac397c92b85?lastModified=1793315900&narHash=sha256-z5lZoCwheBzMgRtfYlGLMhmPwhv1Rty16Kf269n8ctc%3D"
+    },
+    "nodejs@24": {
+      "last_modified": "2026-11-19T13:46:25Z",
+      "plugin_version": "0.0.6",
+      "resolved": "github:NixOS/nixpkgs/19cfded70b91ca0981373973c5b1efffdd4d6647#nodejs",
+      "source": "devbox-search",
+      "version": "24.22.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/vxh4ylwcdwyqhils1q6084ih7l5qinwk-nodejs-24.22.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/vxh4ylwcdwyqhils1q6084ih7l5qinwk-nodejs-24.22.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/pl77fywj3l09rzgsssy5drc52lpk9n0d-nodejs-24.22.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/pl77fywj3l09rzgsssy5drc52lpk9n0d-nodejs-24.22.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3kfmdqn711fqcc2y1qnjssancqf7b36l-nodejs-24.22.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/3kfmdqn711fqcc2y1qnjssancqf7b36l-nodejs-24.22.2"
+        }
+      }
+    },
+    "pre-commit@latest": {
+      "last_modified": "2026-11-19T13:46:25Z",
+      "resolved": "github:NixOS/nixpkgs/19cfded70b91ca0981373973c5b1efffdd4d6647#pre-commit",
+      "source": "devbox-search",
+      "version": "4.7.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/57v3a1fp351l07qlcmdiajg4gpad62a1-pre-commit-4.7.0",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/9ai0c9qq93gq10qibpv91bmqsi852m9b-pre-commit-4.7.0-dist"
+            }
+          ],
+          "store_path": "/nix/store/57v3a1fp351l07qlcmdiajg4gpad62a1-pre-commit-4.7.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/34vq37n34i71lkqrkmbsidkv9b1mc8ii-pre-commit-4.7.0",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/8c6hdipn07bd8f4ajh05zcpbj6b6qr3b-pre-commit-4.7.0-dist"
+            }
+          ],
+          "store_path": "/nix/store/34vq37n34i71lkqrkmbsidkv9b1mc8ii-pre-commit-4.7.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1kxcxwh3zyf89b3ymaqhv7pj479v4ksn-pre-commit-4.7.0",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/m9sdvw3vwiqkapmchihr5w0j5wn6lnad-pre-commit-4.7.0-dist"
+            }
+          ],
+          "store_path": "/nix/store/1kxcxwh3zyf89b3ymaqhv7pj479v4ksn-pre-commit-4.7.0"
+        }
+      }
+    },
+    "process-compose@latest": {
+      "last_modified": "2026-11-19T13:46:25Z",
+      "resolved": "github:NixOS/nixpkgs/19cfded70b91ca0981373973c5b1efffdd4d6647#process-compose",
+      "source": "devbox-search",
+      "version": "1.122.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/6dp40bqsklzsvyjkphil96d8mjssarlw-process-compose-1.122.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/6dp40bqsklzsvyjkphil96d8mjssarlw-process-compose-1.122.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/v5dj570wwldlvqygyhakzj9c1l43nvzi-process-compose-1.122.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/v5dj570wwldlvqygyhakzj9c1l43nvzi-process-compose-1.122.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/ilmlbfg96x4yvcp9zi33mk5x7yjgj181-process-compose-1.122.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/ilmlbfg96x4yvcp9zi33mk5x7yjgj181-process-compose-1.122.0"
+        }
+      }
+    }
+  }
+}

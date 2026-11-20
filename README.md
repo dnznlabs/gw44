@@ -1,2 +1,74 @@
-# gw44
-DNZN // GW44
+# DNZN // GW44
+
+A web gateway for contracts that serve their own front end: `/` is the contract's [ERC-8244](https://github.com/ethereum/ERCs/pull/1712) `html()`, every other path is its [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) `request()`.
+
+by **Denizen.** // dxnzn.wei
+
+The gateway is two static files. A page shell installs a service worker, and from then on the worker answers every request on the origin by calling the contract from the visitor's browser, straight to a public RPC endpoint. There is no gateway server, so there is nothing between the chain and the reader that can hold a stale copy: nothing is cached, and a document the owner changes is what the next reload shows. Each contract gets its own origin, `<contract>.<chain>.<base>`, so one contract's document cannot touch another's.
+
+## Release Info
+
+### Project Status
+
+| STATUS | VERSION | AUDIT |
+|:---|:---|:---|
+| `pre-mvp` | `0.0.0` | no review, no external audit; see [SECURITY.md](SECURITY.md) |
+
+A working prototype from a spike. It is not deployed anywhere; `gw44` is a working name. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
+
+**Alpha software is alpha, act accordingly.**
+
+### URLs
+
+| FORM | URL | WHERE |
+|:---|:---|:---|
+| host | `https://<contract>.<chain>.<base>/<path>` | anywhere; the public form |
+| path | `http://localhost:8244/<chain>/<contract>/<path>` | loopback only |
+
+`<chain>` is the decimal chain id and `<contract>` the 0x address. The path form puts every contract on one origin, so the gateway refuses it on any host that is not loopback. The host form also works locally: `http://<contract>.<chain>.localhost:8244/`.
+
+### What it does not do
+
+- **Answer another site's `<script src>`.** A service worker serves its own pages only. A third-party page that embeds `https://<contract>.<chain>.<base>/widget.js` gets the page shell, not the script. This is the limit of having no server, and [the roadmap](docs/ROADMAP.md) carries the decision it forces.
+- **Answer `curl`, crawlers or link previews.** They get the shell too. `make get URL=<url>` resolves a gateway URL through the same code without a browser.
+- **Verify the RPC endpoint.** One endpoint's answer is taken as the chain's.
+- Names (ENS or otherwise), IPFS, the other `web3://` resolve modes, compressed `request()` bodies.
+
+## Documentation
+
+| DOCUMENT | DESCRIPTION |
+|----------|-------------|
+| [Roadmap](docs/ROADMAP.md) | Milestones, decisions and status |
+| [Spike 001](docs/spikes/001-static-gateway.md) | Whether a gateway with no backend works, measured |
+| [Security](SECURITY.md) | Trust model, what the gateway defends and what it does not |
+| [Working Conventions](AGENTS.md) | Layout, commands and gotchas for contributors, human or agent |
+
+## Development
+
+### Common Helpers
+
+```bash
+make init           # Initialize the development environment (devbox, git hooks)
+make serve          # Build, then serve on http://localhost:8244/<chain>/<contract>/
+make check          # Typecheck, unit tests, browser tests
+make get URL=<url>  # Resolve one gateway URL without a browser
+make help           # List every command
+```
+
+Node 24 and `process-compose` come from `devbox`; run the targets through `devbox shell` or `devbox run -- make <target>`. The browser tests need a Chromium: they look in Playwright's cache, or take `GW44_CHROMIUM=<path>`.
+
+The RPC endpoints are [`chains.json`](chains.json), compiled into the worker at build time. To serve another chain, add it there and rebuild; `GW44_CHAINS=<file> make build` uses a different file. Chain `31337` points at `http://127.0.0.1:8545`.
+
+Deploying is copying `dist/` to a static host that answers unknown paths with `index.html` (`404.html` is the same file, for hosts that use that name).
+
+## Development Team
+
+| Name | GPG Key | GitHub | EOA |
+|:-----|:--------|:-------|:----|
+| Denizen. | [`0DC6C60CFBD5E456`](https://keys.openpgp.org/search?q=CD435BB6A7BED718D95616450DC6C60CFBD5E456) | [`dxnzn`](https://github.com/dxnzn) | [`0x3578...902B`](https://etherscan.io/address/0x357836fFcB45307FA7ff2A574F505753c961902B) *dxnzn.wei* |
+| Elanik. | [`70B6B0BB5F26178A`](https://keys.openpgp.org/search?q=DC49D48844590FA752780FFE70B6B0BB5F26178A) | [`elanikk`](https://github.com/elanikk) | [`0x5A15...C50d`](https://etherscan.io/address/0x5A158aF8DC28FE756dB81Ef669e4Db2536bBC50d) *elanik.wei* |
+| Lakos. | [`591DE0ECA387697A`](https://keys.openpgp.org/search?q=B7EABCBD80422BCC1AE0B23F591DE0ECA387697A) | [`lakkoss`](https://github.com/lakkoss) | [`0x9a54...4529`](https://etherscan.io/address/0x9a5489bB67d68ABABdA050A3b52d4F98Fe224529) *lakos.wei* |
+
+## License
+
+MIT — see [LICENSE](LICENSE).

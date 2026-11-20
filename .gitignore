@@ -1,0 +1,10 @@
+.planning
+.envrc.local
+.claude/settings.local.json
+.devbox/
+
+# Project ignores below.
+
+node_modules/
+dist/
+.tmp/

@@ -1,0 +1,15 @@
+version: "0.5"
+
+processes:
+  # The static host only. It reads no chain: the browser does, through the service worker.
+  gateway:
+    command: "node tools/serve.ts dist"
+    availability:
+      restart: "on_failure"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: ${GW44_PORT}
+        path: /gw44-sw.js
+      initial_delay_seconds: 1
+      period_seconds: 2

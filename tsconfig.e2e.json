@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["es2024", "dom"] },
+  "include": ["test/e2e"],
+  "exclude": []
+}

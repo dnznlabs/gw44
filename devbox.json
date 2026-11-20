@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.18.0/.schema/devbox.schema.json",
+  "packages": [
+    "git@latest",
+    "pre-commit@latest",
+    "nodejs@24",
+    "process-compose@latest"
+  ]
+}

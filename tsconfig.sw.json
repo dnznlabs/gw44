@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["es2024", "webworker"], "types": [] },
+  "include": ["src/adapters/sw/sw.ts"]
+}

@@ -1,16 +1,17 @@
 // The service-worker adapter in a real browser, against a fake chain. Everything is local: a
 // JSON-RPC stub as chain 31337, the static host from tools/serve.ts, and a second origin that
 // plays a third-party page embedding the widget.
-//   node --test test/e2e/gateway.e2e.ts        GW44_CHROMIUM=<path> to pick the browser
+//   node --test test/e2e/gateway.e2e.ts        GW44_ENGINE=chromium|firefox|webkit (default chromium)
+// Playwright finds its own browsers in its cache; `make browsers` installs them.
 import assert from "node:assert/strict";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { type Browser, type BrowserContext, chromium } from "playwright-core";
+import { type Browser, type BrowserContext, chromium, firefox, webkit } from "playwright-core";
 import { HTML_SELECTOR, bytesToHex, encodeRequest } from "../../src/core/abi.ts";
 import { ADDRESS, htmlResult, requestResult } from "../helpers.ts";
 
@@ -52,20 +53,19 @@ const host = createServer((_req, res) => {
   res.end(`<!doctype html><script src="http://localhost:${gatewayPort}/31337/${ADDRESS}/widget.js"></script>`);
 });
 
-function findChromium(): string {
-  const fromEnv = process.env["GW44_CHROMIUM"];
-  if (fromEnv) return fromEnv;
-  const cache = join(homedir(), ".cache", "ms-playwright");
-  for (const dir of existsSync(cache) ? readdirSync(cache).sort().reverse() : []) {
-    for (const sub of existsSync(join(cache, dir)) ? readdirSync(join(cache, dir)) : []) {
-      for (const bin of ["chrome", "chrome-headless-shell", "headless_shell"]) {
-        const path = join(cache, dir, sub, bin);
-        if (existsSync(path)) return path;
-      }
-    }
-  }
-  throw new Error("no Chromium found; set GW44_CHROMIUM");
+/* The engine under test. An unknown name is a failure at load, not a silent fall back to Chromium:
+   a typo in ENGINES would otherwise report a green run of the wrong browser. */
+const ENGINE_TYPES = { chromium, firefox, webkit } as const;
+type EngineName = keyof typeof ENGINE_TYPES;
+
+const engineName = process.env["GW44_ENGINE"] ?? "chromium";
+if (!Object.hasOwn(ENGINE_TYPES, engineName)) {
+  throw new Error(
+    `GW44_ENGINE must be one of ${Object.keys(ENGINE_TYPES).join(", ")}; got ${JSON.stringify(engineName)}`,
+  );
 }
+const engine = ENGINE_TYPES[engineName as EngineName];
+const isChromium = engineName === "chromium";
 
 let browser: Browser;
 let server: ChildProcess;
@@ -87,7 +87,7 @@ before(async () => {
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((done) => server.stdout?.once("data", done));
-  browser = await chromium.launch({ executablePath: findChromium() });
+  browser = await engine.launch();
 });
 
 after(async () => {
@@ -189,7 +189,13 @@ test("path form without the trailing slash redirects to it", async () => {
   await context.close();
 });
 
-test("a forced reload bypasses the worker and still ends on the document", async () => {
+/* Chromium only: the forced reload is driven through the Chrome DevTools Protocol, which Playwright
+   exposes on Chromium alone. Firefox and WebKit have no equivalent for "reload ignoring cache". */
+test("a forced reload bypasses the worker and still ends on the document", {
+  skip: isChromium
+    ? false
+    : `${engineName}: drives the Chrome DevTools Protocol, which Playwright exposes on Chromium only`,
+}, async () => {
   const context = await fresh();
   const page = await context.newPage();
   await page.goto(path());

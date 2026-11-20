@@ -52,11 +52,16 @@ A working prototype from a spike. It is not deployed anywhere; `gw44` is a worki
 make init           # Initialize the development environment (devbox, git hooks)
 make serve          # Build, then serve on http://localhost:8244/<chain>/<contract>/
 make check          # Typecheck, unit tests, browser tests
+make browsers       # Install Playwright's browsers for ENGINES
 make get URL=<url>  # Resolve one gateway URL without a browser
 make help           # List every command
 ```
 
-Node 24 and `process-compose` come from `devbox`; run the targets through `devbox shell` or `devbox run -- make <target>`. The browser tests need a Chromium: they look in Playwright's cache, or take `GW44_CHROMIUM=<path>`.
+Node 24 and `process-compose` come from `devbox`; run the targets through `devbox shell` or `devbox run -- make <target>`.
+
+**Browser engines.** `make e2e` runs the browser suite once per engine in `ENGINES`, in order, stopping at the first failure; the default is `ENGINES=chromium`. The names are `chromium`, `firefox` and `webkit`, and any other name fails rather than being skipped. `make browsers` downloads them into Playwright's cache — Chromium arrives as `chromium-headless-shell`.
+
+**Only Chromium is expected to run on a plain checkout.** Firefox and WebKit need system libraries that are not part of `devbox`, so on a machine without them `make e2e ENGINES=firefox` fails at launch with Playwright's "Host system is missing dependencies" and a list. That is a failure and not a skip, deliberately. The three engines all run in CI, which installs the libraries with `playwright-core install --with-deps`; to get them locally, `sudo npx playwright-core install-deps firefox webkit` once.
 
 The RPC endpoints are [`chains.json`](chains.json), compiled into the worker at build time. To serve another chain, add it there and rebuild; `GW44_CHAINS=<file> make build` uses a different file. Chain `31337` points at `http://127.0.0.1:8545`.
 

@@ -20,6 +20,8 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 
 `make check` is what a PR must pass: `make test` (four strict typechecks, then unit tests) and `make e2e`. Run through `devbox run --`.
 
+`make e2e` runs the browser suite once per engine in `ENGINES`, in order, stopping at the first failure; default `ENGINES=chromium`, names `chromium`, `firefox`, `webkit`, and any other name is a failure at load rather than a skip. `make browsers` installs them into Playwright's cache (Chromium as `chromium-headless-shell`). CI runs all three; `.github/workflows/ci.yml` is the gate on every push.
+
 ## Conventions
 
 - Strict TypeScript, erasable syntax only: Node runs `tools/` and `test/` directly, with no build step. Imports carry the `.ts` extension.
@@ -36,3 +38,5 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 - The path form (`/<chain>/<contract>/`) is loopback-only by design. Do not relax `isLoopback` to make a public demo work.
 - In the path form a document's absolute URLs (`/widget.js`) miss the contract. Host form does not have this; it is a limit of local path URLs, not a bug.
 - The e2e suite's no-service-worker case takes about four seconds: Playwright's block leaves `register()` pending, so the test waits out `WORKER_MS` in `boot.ts`.
+- **Only Chromium launches on a machine without Firefox's and WebKit's system libraries, and this VM is one.** `make e2e ENGINES=firefox` or `webkit` exits non-zero at launch with Playwright's "Host system is missing dependencies" and a list — Firefox wants 18 libraries, starting `libasound.so.2`; WebKit wants more. That is a failure by design, never a skip, so an engine that cannot run is never mistaken for one that passed. **Open question 1 of m01-t01 took its default: the libraries are not installed here**, so the two engines are exercised in CI only. `sudo npx playwright-core install-deps firefox webkit` is the one-time fix if that is ever reversed.
+- A case an engine genuinely cannot run is skipped **by name with the reason in the `test()` call**, so the reason appears in the run output. One exists: the forced-reload case drives the Chrome DevTools Protocol, which Playwright exposes on Chromium alone.

@@ -2,6 +2,13 @@
 
 PR: #35 · Branch: `m01/t04-pin` · 2026-11-20
 
+<!-- Addressing the review at `3821d4f`: `main` is merged in (`98c0423`) so the branch's `TASK.md` is
+     the one on `main`, and the README sentence now states what a pinned host must do rather than
+     pointing at a `docs/DEPLOY.md` that step 9's amendment moved to M02. The hashes below were
+     measured at `be489d9` and still hold: `git diff --name-only be489d9..HEAD -- src tools
+     chains.json package-lock.json devbox.lock` is empty, and a rebuild at the head prints the same
+     six lines. -->
+
 `parsePin` and `pinnedTarget` in `src/core/target.ts` turn `<chain>:<address>` into a target that never reads the hostname and takes the whole path as the resource; `tools/build.ts` reads `GW44_PIN`, defines it alongside the endpoint map for the pinned chain only, and says which build it made on its first line; `src/adapters/sw/config.ts` exports `targetOf`, the one place either adapter decides which contract a URL names, and `sw.ts` and `boot.ts` call it where they called `parseTarget`. `tools/get.ts` honours the same variable, so the pinned path is comparable with the chain without a browser, and `tools/verify.sh` and the CI reproducibility step both cover the pinned deployable as a second artefact with its own bytes. Steps 5 and 8 were done differently from the plan; both are below.
 
 ## Acceptance criteria

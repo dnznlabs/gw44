@@ -9,7 +9,7 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 | Milestone | Goal | Status |
 |:----------|:-----|:-------|
 | [M01 — MVP](milestones/m01/MILESTONE.md) | The prototype hardened and reviewed, and a pinned build that serves one project's contracts, on every chain it is deployed to, from the project's own domain | in progress |
-| M02 — Dedicated deployment | A project deploys its own gateway to GitHub Pages from its own repository with one reusable workflow; `rake.dnzn.dev` is the first | not started |
+| [M02 — Dedicated deployment](milestones/m02/MILESTONE.md) | A project deploys its own gateway to GitHub Pages from its own repository with one reusable workflow; `rake.dnzn.dev` is the first | not started |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through a project's gateway | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
 | M05 — Public gateway | The repository is public and `gw44.link` serves any contract, on static hosting, with the base domain on the Public Suffix List | not started |
@@ -26,7 +26,7 @@ Dedicated gateways first (direction given 2026-11-20). A project's own domain ne
 
 M01 first because M02 deploys whatever M01 leaves, and the security review should read the code that ships. M02's first step is a throwaway GitHub Pages site: no real static host has been tested, and Pages answers a deep link with the shell under a 404 status.
 
-M03 follows M02 because the loader is served from a deployed origin. A static host cannot answer another site's `<script src>` on a project's own domain any more than on a public one, so embeds need the loader either way (Decisions, 6). If rake's mainnet release needs the embed snippet, M03 is the next thing after `rake.dnzn.dev` is up.
+M03 follows M02 because the loader is served from a deployed origin. A static host cannot answer another site's `<script src>` on a project's own domain any more than on a public one, so embeds need the loader either way (Decisions, 6). Until then a project publishes static copies of its script beside the gateway (Decisions, 10), so rake's mainnet release does not wait for M03.
 
 M04 before anything public: on an official deployment one lying endpoint decides what the project's domain shows. It is the only milestone that is real engineering rather than hardening.
 
@@ -54,6 +54,8 @@ Closed.
 7. **The name is `gw44` and the public base domain is `gw44.link`** (2026-11-20, [#3](https://github.com/dnznlabs/gw44/issues/3)). The domain is registered. A one-way door from M05 on, when the name is in URLs other people publish.
 8. **No client-side cache** (2026-11-20, [#4](https://github.com/dnznlabs/gw44/issues/4)). Every load is one `eth_call`, measured at 279 ms for a repeat visit against the hosted gateway's 327 ms. A cache keyed by a validator the contract controls may be taken up after production, as work of its own, and only with a measurement that argues for it and tests that show it cannot serve a stale document.
 9. **One origin per project, and the chain in the path** (2026-11-20). A project's gateway serves that project's contracts and no other's. Built for one chain it serves the contract at `/`; built for several it serves each under `/<chain>/` and sends `/` to the default chain, so an absolute URL in a document fails instead of reading another chain's contract. Chains of one project share an origin, so the project keeps its own storage apart by chain. Rejected: one shared instance for every project (`gw.<domain>/<project>/<chain>/`), which puts every project's storage, service worker and wallet permission in one origin.
+10. **`rake.dnzn.dev` is the gateway, with static copies of `widget.js` beside it** (2026-11-20, [#44](https://github.com/dnznlabs/gw44/issues/44)). The hostname serves a gw44 build that reads rake's document from the chain on every chain rake is deployed to, and the deploy publishes each chain's `widget.js` as a plain file, checked against the chain's hash, so another site can embed it with a `<script src>`. The contract stays the source of the script; the file is a copy, and the documented snippet pins it to the chain's bytes with an `integrity` attribute. It supersedes rake's decision 59, which gave the hostname to a static mirror of one chain's document. Accepted with it: the site depends on public RPC endpoints where a mirror would not. Rejected: the mirror at that hostname with the gateway on another (two official URLs and a second repository); the mirror alone.
+11. **Testnet contracts are not served from a project's mainnet origin** (2026-11-20). They would share its storage, service worker and wallet permission with the mainnet application, under an owner key usually held more loosely. A test site deployed from this repository serves testnet fixtures; a project's own hostname carries its mainnet chains only.
 
 ## Findings carried forward
 
@@ -63,7 +65,7 @@ For M02's scoping.
 - **A project's workflow has to read this repository while it is private**: a deploy key or a release artefact, pinned to a commit, with the build's printed hashes checked.
 - **Pages answers an unknown path with `404.html` and status 404.** The shell should still start the worker; unproven.
 - **`docs/DEPLOY.md` is written here**, by making the deployment; moved from M01's criterion 11.
-- **Where testnet deployments are served** is an open question for this milestone's scoping: under the project's own origin they share it with mainnet.
+- **A project site under `github.io/<repository>/` cannot work**: the worker must sit at the root of its origin, so every deployment needs a custom domain.
 
 For M05's scoping. From the hosts' documentation, read 2026-11-20; nothing here has been deployed.
 

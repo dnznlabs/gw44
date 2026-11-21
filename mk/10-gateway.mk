@@ -19,7 +19,7 @@ ENGINES ?= chromium
 # Playwright ships Chromium as a headless shell under a different package name from its engine name.
 BROWSER_PACKAGES = $(patsubst chromium,chromium-headless-shell,$(ENGINES))
 
-.PHONY: build serve typecheck test e2e check get clean browsers verify
+.PHONY: build serve typecheck test e2e check get clean browsers verify check-site
 
 node_modules: package.json package-lock.json
 	npm ci
@@ -63,6 +63,15 @@ check: test e2e ## Everything a PR must pass
 # public endpoints, and a gate that depends on those is a decision rather than a detail.
 verify: node_modules ## Prove the gateway serves what the chain returns, with cast as the referee
 	tools/verify.sh
+
+# Deliberately not a prerequisite of `check` and not in the workflow, for `verify`'s reason and one
+# more: it needs a site that somebody deployed, which no gate can assume exists.
+check-site: node_modules ## Check a deployed gateway in a browser: make check-site URL=<base url> [ENGINES="..."]
+	@test -n "$(URL)" || { echo 'make check-site needs URL=<base url>'; exit 2; }
+	@for e in $(ENGINES); do \
+		PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 GW44_ENGINE=$$e \
+			node tools/check-site.ts "$(URL)" test/fixtures/gw44.two-chains.json || exit 1; \
+	done
 
 get: node_modules ## Resolve one gateway URL without a browser: make get URL=<url>
 	@node tools/get.ts "$(URL)"

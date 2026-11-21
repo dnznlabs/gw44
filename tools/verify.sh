@@ -5,6 +5,7 @@
 #   devbox run -- make verify
 #   VERIFY_CHAINS=11155111 devbox run -- make verify
 #   VERIFY_ADDRESS=0x… devbox run -- make verify
+#   VERIFY_SITE=https://host devbox run -- make verify   also check a deployed site's bytes
 #
 # The point is an independent decoder. The reference side is `cast` plus shell arithmetic over the
 # raw ABI hex, and it imports nothing under `src/`: a bug shared between the gateway's decoder and
@@ -163,6 +164,38 @@ for chain in $VERIFY_CHAINS; do
     fi
   done
 done
+
+# --- a deployed site serves the same bytes, if one was named ---
+# `VERIFY_SITE=<base url>` adds a pass over a real host: the bytes a controlled page receives there,
+# against the same reference hashes the chain gave above. Nothing else changes, and with the variable
+# unset this block does not run — a gate that needed somebody to have deployed would be no gate.
+if [ -n "${VERIFY_SITE:-}" ]; then
+  for chain in $VERIFY_CHAINS; do
+    out=$(node tools/site-hash.ts "$VERIFY_SITE" "/$chain/" "/$chain/" "/$chain/widget.js" 2>"$work/site.err") || {
+      note "$chain site: tools/site-hash.ts failed — MISMATCH ($(tail -1 "$work/site.err"))"
+      fail=1
+      continue
+    }
+    while read -r path hash bytes; do
+      [ -n "$path" ] || continue
+      case "$path" in
+        */widget.js) resource=widget ;;
+        *) resource=root ;;
+      esac
+      chain_hash=${ref_hash["$chain $resource"]:-}
+      len=${ref_len["$chain $resource"]:-}
+      if [ -z "$chain_hash" ]; then
+        note "$chain site $resource: no reference hash — MISMATCH"
+        fail=1
+      elif [ "$chain_hash" = "$hash" ] && [ "$bytes" -eq "$len" ]; then
+        note "$chain site $resource $len B chain=${chain_hash:0:16}… site=${hash:0:16}… ok"
+      else
+        note "$chain site $resource chain=$len B $chain_hash site=$bytes B $hash MISMATCH"
+        fail=1
+      fi
+    done <<< "$out"
+  done
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "verify: a comparison failed" >&2

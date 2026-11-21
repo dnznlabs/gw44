@@ -26,7 +26,9 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 
 `make audit` runs the security review of record: two language models in two harnesses read `audits/SCOPE` independently, blind, in a tree outside the repository, and a third pass reconciles them into `audits/<date>/AUDIT.md`. **It costs rate limit and wall clock — tens of minutes** (2026-11-20: 360 s, 355 s and 233 s for the two legs and the rollup) and needs both CLIs authenticated. `CODEX_MODEL`, `CLAUDE_MODEL` and `AUDIT_DATE` override what it runs. Audits are append-only and preflight refuses a date that already has one; the method, and why the legs run blind, are in `audits/README.md`.
 
-**Neither `make verify` nor `make audit` is part of `make check`, and that is deliberate.** For verify, CI is offline. It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
+`make check-site URL=<base url> [ENGINES="…"]` checks a **deployed** gateway in a browser, once per engine, and `VERIFY_SITE=<base url> make verify` adds a pass comparing the bytes that site serves with what the chain returns. Both need a site somebody deployed, so neither is reachable from `make check` or the workflow. The test site is `https://gw-test.dnzn.dev`, deployed by hand with the `pages-test` workflow from `main`.
+
+**None of `make verify`, `make audit` or `make check-site` is part of `make check`, and that is deliberate.** For verify, CI is offline. It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
 
 ## Conventions
 

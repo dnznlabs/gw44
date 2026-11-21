@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "lib": ["es2024", "dom"] },
-  "include": ["test/e2e"],
+  "include": ["test/e2e", "tools/check-site.ts", "tools/site-hash.ts"],
   "exclude": []
 }

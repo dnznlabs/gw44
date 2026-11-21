@@ -168,8 +168,13 @@ not read alike.
   unmeasured. The mitigation is method diversity — the test suite, a browser suite in three engines,
   a person reading the diff — not more models.
 - **A leg could still read outside its tree.** Both run with write access and no sandbox on reads,
-  so a leg that went looking in `TMPDIR` could find the other's staged output. Nothing has; the
-  transcripts are what would show it.
+  so a leg that went looking in `TMPDIR` could find the other's staged output. One has reached
+  outside its tree, and the transcripts showed it: in the 2026-11-21 run a leg read `esbuild` from
+  a checkout's `node_modules` to run an experiment, which is how F13's correct finding was
+  produced, and the same directory listing named other checkouts of this project on the machine.
+  Neither transcript shows a leg opening one, and neither run shows one leg reading the other's
+  output. The mitigation is where the legs start and reading the transcripts after each run, not
+  a sandbox ([#77](https://github.com/dnznlabs/gw44/issues/77)).
 - **A leg is only graded against a known answer.** [`KNOWN_ANSWER.md`](KNOWN_ANSWER.md) holds what
   was known by hand before a run, with file, line and mechanism, and the rollup records per leg
   whether each was found. Whether a leg finds a bug that was already known is the only evidence

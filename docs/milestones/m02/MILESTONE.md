@@ -1,6 +1,6 @@
 # M02 — Dedicated deployment
 
-Status: in progress · updated 2026-11-21
+Status: done 2026-11-21 · criteria 1 to 5 re-run against the test site on `main` at `6dc180a`; criterion 8 transferred to rake M05
 
 A project deploys its own gateway to GitHub Pages from its own repository by calling one workflow, and `rake.dnzn.dev` is the first to do it. It comes now because M01 leaves a build nobody has put on a real static host: every claim so far was measured against `tools/serve.ts` on loopback.
 
@@ -32,17 +32,35 @@ The first is filed. The others become issues assigned to the Product Owner when 
 
 - **Action: Pages for the test site** ([#51](https://github.com/dnznlabs/gw44/issues/51)). The hostname is `gw-test.dnzn.dev` (roadmap decision 12) and its DNS record is in place, as is `rake.dnzn.dev`'s (both read 2026-11-21). Still to do: Pages enabled on this repository with GitHub Actions as the source, that custom domain and HTTPS enforced; and `dnzn.dev` verified for the organisation, because a record pointing at GitHub Pages with no site behind it can be claimed by anyone's. Needed by m02-t01.
 - **Action: a read-only deploy key and Actions access** ([#86](https://github.com/dnznlabs/gw44/issues/86)). While `gw44` is private, a workflow running in another repository cannot check it out with its own token or call a workflow here without them. Needed by m02-t02 step 3.
-- **Action: criterion 7**, on a phone.
+- **Action: criterion 7**, on a phone. Done 2026-11-21 ([#106](https://github.com/dnznlabs/gw44/issues/106)).
 - **Focus.** Criterion 8 is work in rake's repository. It starts on rake's two testnets when the focus allows work there, and closes when rake's mainnet chains are on the site.
 
-## Where it stands
+## Close-out
 
-Updated 2026-11-21. Criteria 1 to 7 are met on the test site, `https://gw-test.dnzn.dev`. Open before the milestone can close:
+Closed 2026-11-21. Criteria 1 to 7 are met on the test site, `https://gw-test.dnzn.dev`, and criterion 8 is transferred to rake.
 
-- **Criterion 8, `rake.dnzn.dev`**, which is rake's m05-t04. Its first deploy can run now on rake's two testnets; it closes when rake's mainnet chains are served.
-- **[#85](https://github.com/dnznlabs/gw44/issues/85), and a section of the deploy guide to correct.** Roadmap decision 14 (2026-11-21): a redeploy does reach a returning visitor by navigating, and nothing is built for it. `docs/DEPLOY.md` § 8 and m02-t02's handoff still say the opposite and are corrected in one Markdown change; one reading on GitHub Pages with the browser left open is taken at the next deploy that changes the worker.
-- **The deploy step fails more often than it should**: three of eight runs through the reusable workflow deployed, for a reason inside GitHub's deploy action that an in-job retry now covers ([#111](https://github.com/dnznlabs/gw44/pull/111)). The two runs since both deployed on the first attempt; two is not a rate.
-- **Carried issues labelled `m02`** that are not yet placed: [#77](https://github.com/dnznlabs/gw44/issues/77), [#107](https://github.com/dnznlabs/gw44/issues/107), [#109](https://github.com/dnznlabs/gw44/issues/109), [#110](https://github.com/dnznlabs/gw44/issues/110). Each is fixed, moved or dropped with a reason at the close-out.
+| Criterion | Result | Evidence |
+|:--|:--|:--|
+| 1 — a real host serves it | met | Re-run 2026-11-21: `make check-site` against the site, nine of nine cases in Chromium, Firefox and WebKit (27 of 27), which include the root ending on `/11155111/`, the cold deep link recovering from Pages' 404, and an unconfigured path answering 404 |
+| 2 — what it serves is the chain's | met | Re-run 2026-11-21: `VERIFY_SITE=https://gw-test.dnzn.dev make verify` prints `ok` for the site's root and `widget.js` on `11155111` and `84532`, each equal to the chain's SHA-256 |
+| 3 — one workflow deploys any project | met | The site was last deployed by `deploy-pages.yml` called from `pages-test.yml`, runs [44948650446](https://github.com/dnznlabs/gw44/actions/runs/44948650446) and [44949792513](https://github.com/dnznlabs/gw44/actions/runs/44949792513) at `3ee50fe`. Called from this repository only; the first call from another repository is rake's m05-t04 |
+| 4 — static copies for embeds | met | `check-site`'s second-origin case in each engine: the copy loads with the printed `integrity` and is refused with one character changed |
+| 5 — the browser's own requests cost no call | met | `check-site`'s favicon case in each engine; the one-contract sentence is `docs/DEPLOY.md` § 9, and #36 is closed |
+| 6 — `docs/DEPLOY.md` | met, not re-run | Two readers with no context followed it, recorded in [m02-t03's handoff](tasks/m02-t03/HANDOFF.md). Four steps no reader could take are named there: the deploy itself, the private-repository settings, the reader's own contract, and § 8's figure |
+| 7 — phones | met, not re-run | The Product Owner's readings of 2026-11-21 on [#106](https://github.com/dnznlabs/gw44/issues/106): mobile Safari and MetaMask 8.20.2's in-app browser, iPhone 14, iOS 27.2.1 |
+| 8 — `rake.dnzn.dev` | **transferred** | To rake's M05 criterion 5, which asks the same two checks of `https://rake.dnzn.dev` on every chain rake is live on ([rake#319](https://github.com/dnznlabs/rake/pull/319)). It was never work in this repository, and it needs rake's mainnet deployments. Planned as rake's m05-t04 and its later deploy tasks |
+
+**What the milestone leaves unproven.** The workflow has not yet been called from a second repository, so the private-repository path of `docs/DEPLOY.md` § 5 (the deploy key and organisation access) has been set up for rake and not yet run. The deploy step's record is three of eight runs before the in-job retry ([#111](https://github.com/dnznlabs/gw44/pull/111)) and two of two since; two is not a rate. Both are read at rake's first run, and a fault found there is an issue here.
+
+### Carried issues
+
+| Issue | Disposition |
+|:--|:--|
+| [#77](https://github.com/dnznlabs/gw44/issues/77) | fixed in the close-out's own change: `audits/README.md` § Known limits says what the transcripts show |
+| [#107](https://github.com/dnznlabs/gw44/issues/107) | done: `docs/DEPLOY.md` § 5 carries the `actions: read` line and why, since #112. The commit it names as the first to need the line is corrected with #85 |
+| [#85](https://github.com/dnznlabs/gw44/issues/85) | moved to `m03`: decision 14 settled the question, and what is left is one reading on GitHub Pages with the browser left open, at the next deploy that changes the worker, with three sentences of `docs/DEPLOY.md` §§ 8 and 10 corrected in the same change. M03 is the next milestone that changes the worker |
+| [#109](https://github.com/dnznlabs/gw44/issues/109) | moved to `m03`: the two workflow test scripts are committed with the next change to either deploy workflow. No deployed behaviour depends on them |
+| [#110](https://github.com/dnznlabs/gw44/issues/110) | moved to `m03`: `make verify` with one chain fails its last pass and blames the browser stage. `docs/DEPLOY.md` § 7 says to read the lines, and rake's site has several chains, so nothing waits on it |
 
 ## Phases
 
@@ -66,7 +84,7 @@ The build on GitHub Pages under a real hostname, checked in three engines. Finis
 
 | Task | Goal | Status |
 |:-----|:-----|:-------|
-| rake m05-t04 | `rake.dnzn.dev` (criterion 8), planned and tracked in rake | not started |
+| rake m05-t04 | `rake.dnzn.dev` (criterion 8), planned and tracked in rake | transferred to rake M05 criterion 5 at the close-out; dispatched 2026-11-21 ([rake#321](https://github.com/dnznlabs/rake/issues/321)) |
 
 Tasks run in the order listed: m02-t04 before m02-t03, so the guide describes the code that ships. `TASK.md` for m02-t01 is written while m01-t06 is being built.
 

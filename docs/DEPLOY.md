@@ -196,7 +196,9 @@ This repository's own caller is [`.github/workflows/pages-test.yml`](../.github/
 | `expect` | Optional. The three hash lines the build must print, verbatim. Any difference fails the run **before** anything is deployed. |
 | `verify-only` | Optional. Build and check, deploy nothing. The way to exercise the whole path without replacing a live site. |
 
-**`actions: read` is not optional, and it is the one a caller forgets.** The called workflow lists this run's artifacts to wait for the one it just uploaded, and a called workflow's token is capped by its caller's grant — so a caller that grants only the other three gets a failure inside the wait, about an artifacts call, which does not read as a permissions problem. It is needed from commit `3ee50fe` of this repository onwards.
+**`actions: read` is not optional, and it is the one a caller forgets.** The called workflow lists this run's artifacts to wait for the one it just uploaded, and GitHub's rule for a call chain is that permissions can only be *maintained or reduced, not elevated* — so the called workflow cannot grant itself what your caller withheld. It is needed from commit `3ee50fe` of this repository onwards; measured in the run that deployed, the effective `GITHUB_TOKEN` then carries `Actions: read` alongside `Contents: read`, `Metadata: read` and `Pages: write`, and before the line existed it carried only the last three.
+
+**What a missing grant looks like has not been measured here**, so: it fails either when the call is validated, before the job starts, or inside the wait step as an artifacts call that cannot read the run — and the second does not read as a permissions problem at all. Either way the fix is the line. If you meet it, the message is worth adding to § 10.
 
 **Pin the commit twice.** `uses:` pins the workflow; `gw44-ref` pins the source it builds. They should be the same commit, and nothing inside the workflow can check that — `uses:` is resolved by GitHub before the job starts and is not readable from inside it.
 

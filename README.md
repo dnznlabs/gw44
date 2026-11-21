@@ -81,7 +81,8 @@ Alpha software. Nothing here has been reviewed by anyone but its authors, and th
 |----------|-------------|
 | [Roadmap](docs/ROADMAP.md) | Milestones, decisions and status |
 | [Spike 001](docs/spikes/001-static-gateway.md) | Whether a gateway with no backend works, measured |
-| [Security](SECURITY.md) | Trust model, what the gateway defends and what it does not |
+| [Security](SECURITY.md) | Trust model, the review of record and its findings, what the gateway defends and what it does not |
+| [Audits](audits/README.md) | How the code is reviewed: two blind adversarial legs and a rollup, and what the method does not claim |
 | [Working Conventions](AGENTS.md) | Layout, commands and gotchas for contributors, human or agent |
 
 ## Development

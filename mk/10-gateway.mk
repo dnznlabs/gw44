@@ -4,7 +4,14 @@ export GW44_PORT
 
 TSCONFIGS := tsconfig.json tsconfig.sw.json tsconfig.dom.json tsconfig.e2e.json
 
-.PHONY: build serve typecheck test e2e check get clean
+# Browser engines the e2e suite runs under, in order. Only chromium is expected to launch on a
+# machine without Firefox's and WebKit's system libraries; CI runs all three.
+ENGINES ?= chromium
+
+# Playwright ships Chromium as a headless shell under a different package name from its engine name.
+BROWSER_PACKAGES = $(patsubst chromium,chromium-headless-shell,$(ENGINES))
+
+.PHONY: build serve typecheck test e2e check get clean browsers
 
 node_modules: package.json package-lock.json
 	npm ci
@@ -22,8 +29,16 @@ typecheck: node_modules ## Strict typecheck of every program
 test: typecheck ## Typecheck and unit tests
 	node --test test/*.test.ts
 
-e2e: node_modules ## Browser tests against a fake chain (GW44_CHROMIUM=<path> picks the browser)
-	node --test --test-timeout=30000 test/e2e/*.e2e.ts
+browsers: node_modules ## Install Playwright's browsers for $(ENGINES)
+	npx playwright-core install $(BROWSER_PACKAGES)
+
+# One run per engine, in order, stopping at the first failure. A named engine that cannot launch is
+# a failure and never a skip, so a missing library is reported rather than passed over.
+e2e: node_modules ## Browser tests against a fake chain, once per engine in ENGINES="$(ENGINES)"
+	@for e in $(ENGINES); do \
+		echo "==> e2e: $$e"; \
+		GW44_ENGINE=$$e node --test --test-timeout=30000 test/e2e/*.e2e.ts || exit 1; \
+	done
 
 check: test e2e ## Everything a PR must pass
 

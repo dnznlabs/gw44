@@ -16,6 +16,13 @@ repos:
     hooks:
       - id: betterleaks
         stages: [pre-commit]
+      # The hook above scans the staged diff, which under --all-files is empty. CI needs the whole
+      # tree, so this second one scans the directory instead. Manual stage: it is not a commit gate.
+      - id: betterleaks
+        alias: betterleaks-tree
+        entry: betterleaks dir . --redact --verbose
+        pass_filenames: false
+        stages: [manual]
 
   # `stages` and `always_run` are both load-bearing on these two.
   - repo: local

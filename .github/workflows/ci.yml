@@ -1,0 +1,69 @@
+# What a push must pass: the whole-tree secret scan, the typechecks and unit tests, then the browser
+# suite in all three engines. Offline by design — nothing here reaches a live chain (m01-t03).
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 0.22.0, not the 0.18.0 of devbox.json's $schema: the committed devbox.lock was written by
+      # 0.22.0 and records `plugin_version: 0.0.6`, where 0.18.0 rewrites it to 0.0.4 and trips the
+      # working-tree check at the end. Re-locking under 0.18.0 would only move the problem, since
+      # the next local `devbox` run writes 0.0.6 back.
+      - uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          devbox-version: 0.22.0
+          enable-cache: true
+
+      # The pre-commit `betterleaks` hook scans the staged diff, which is empty here; the
+      # `betterleaks-tree` alias scans the directory. A pass on nothing is the failure mode worth
+      # guarding, so the byte count has to look like a real tree. The log goes outside the
+      # repository: a stray file would trip the working-tree check at the end.
+      - name: Secret scan, whole tree
+        shell: bash
+        run: |
+          set -eo pipefail
+          devbox run -- pre-commit run betterleaks-tree --hook-stage manual --all-files --verbose \
+            2>&1 | tee "$RUNNER_TEMP/scan.log"
+          grep -Eq 'scanned ~[1-9][0-9]{5,} bytes' "$RUNNER_TEMP/scan.log"
+
+      - name: Install dependencies
+        run: devbox run -- npm ci
+
+      # --with-deps brings the system libraries Firefox and WebKit need; they are what the
+      # development VM lacks. Chromium ships as a headless shell under its own package name.
+      - name: Install browsers
+        run: devbox run -- npx playwright-core install --with-deps chromium-headless-shell firefox webkit
+
+      - name: Typecheck and unit tests
+        run: devbox run -- make test
+
+      - name: Browser tests, three engines
+        env:
+          # Playwright checks its browsers' shared libraries before launching, by running `ldd`.
+          # Inside devbox that resolves to nix's glibc `ldd`, which does not see the apt packages
+          # `--with-deps` just installed, so the check reports every library missing and Firefox
+          # and WebKit never start. Measured on this runner: outside devbox `ldd` on the Firefox
+          # binary reports 0 "not found", inside devbox `ldd` is
+          # /nix/store/...-glibc-2.44-57-bin/bin/ldd. The libraries are there; only the check is
+          # wrong, so it is skipped and the launch itself is left to fail if anything is missing.
+          PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1"
+        run: devbox run -- make e2e ENGINES="chromium firefox webkit"
+
+      # Last, so it catches anything the build or the tests wrote into a tracked path.
+      - name: The working tree is unchanged
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "the build or the tests modified tracked files:"
+            git status --porcelain
+            git diff
+            exit 1
+          fi

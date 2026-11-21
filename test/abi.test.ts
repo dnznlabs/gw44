@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bytesToHex, decodeRequestResult, decodeString, encodeRequest, hexToBytes } from "../src/core/abi.ts";
 import { GatewayError } from "../src/core/errors.ts";
-import { htmlResult, requestResult } from "./helpers.ts";
+import { aliasedHeaderResult, htmlResult, requestResult } from "./helpers.ts";
 import { CALL_MIXED, CALL_WIDGET, RESULT_HTML, RESULT_REQUEST } from "./vectors.ts";
 
 const text = (b: Uint8Array): string => new TextDecoder().decode(b);
@@ -66,6 +66,50 @@ test("a header count above the cap is refused before any header is read", () => 
   data[data.length - 2] = 0xff; // count word: 0xff00
 
   assert.throws(() => decodeRequestResult(data), /too many headers/);
+});
+
+/* F4 of the 2026-11-20 review: the validating regular expression backtracked once per byte and threw
+   `RangeError` above about 4 MiB, which the RPC adapter counted as that endpoint failing — so a
+   document the size cap admits was fetched from every endpoint in turn and served as a 502. */
+test("eight mebibytes of hex decode, where the regular expression overflowed", () => {
+  const hex = `0x${"ab".repeat(8 * 1024 * 1024)}`;
+
+  const out = hexToBytes(hex);
+
+  assert.equal(out.length, 8 * 1024 * 1024);
+  assert.equal(out[0], 0xab);
+  assert.equal(out.at(-1), 0xab);
+});
+
+test("one bad character at the end of a large string is bad-response, never a RangeError", () => {
+  const hex = `0x${"ab".repeat(5 * 1024 * 1024 - 1)}zz`;
+
+  assert.throws(() => hexToBytes(hex), GatewayError);
+  assert.throws(() => hexToBytes(hex), /not hex/);
+});
+
+/* F3 of the 2026-11-20 review: the count cap bounded how many headers were read and nothing bounded
+   how much text they decoded to, so 64 pairs aliasing one string multiplied the data 128 times. */
+test("headers that alias one string are refused before any of them is decoded", () => {
+  const data = aliasedHeaderResult(64, 64 * 1024);
+
+  assert.throws(() => decodeRequestResult(data), GatewayError);
+  assert.throws(() => decodeRequestResult(data), /header/);
+});
+
+test("the size bound is on the header text, not on the data: a small aliased set still decodes", () => {
+  const result = decodeRequestResult(aliasedHeaderResult(64, 64));
+
+  assert.equal(result.headers.length, 64);
+  assert.equal(result.headers[0]?.[0], "h".repeat(64));
+});
+
+test("sixty-four distinct small headers still decode", () => {
+  const headers: [string, string][] = Array.from({ length: 64 }, (_, i) => [`x-k-${i}`, `v-${i}`]);
+  const result = decodeRequestResult(requestResult(200, "", headers));
+
+  assert.equal(result.headers.length, 64);
+  assert.deepEqual(result.headers[63], ["x-k-63", "v-63"]);
 });
 
 /* The run count is `GW44_FUZZ_RUNS`, default 20,000 so `make test` stays quick; CI sets 1,000,000.

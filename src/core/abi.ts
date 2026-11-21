@@ -7,12 +7,46 @@ export const REQUEST_SELECTOR = "0x1374c460";
 
 const WORD = 32;
 const MAX_HEADERS = 64;
+/**
+ * Total bytes of key and value text one response's headers may carry. The count cap alone bounded
+ * how many headers were read and not how much they decoded to: every pair's key and value offset is
+ * checked against the data's bounds only, so all 128 of them may name one string and a capped
+ * response decodes to many times its size (F3, the 2026-11-20 review).
+ *
+ * Chosen rather than measured, at about four times a long content security policy. The live fixture
+ * returns 49 bytes of header text at most, measured on both testnets at this commit.
+ */
+const MAX_HEADER_BYTES = 16_384;
 const utf8 = new TextEncoder();
 
+/** A hex digit's value, or -1. Indexed by character code, so no branch per digit class. */
+const NIBBLE = (() => {
+  const table = new Int8Array(128).fill(-1);
+  for (let c = 0; c < 10; c++) table[0x30 + c] = c;
+  for (let c = 0; c < 6; c++) table[0x41 + c] = 10 + c;
+  for (let c = 0; c < 6; c++) table[0x61 + c] = 10 + c;
+  return table;
+})();
+
+/**
+ * Validated in the conversion loop rather than by a regular expression. `/^0x([0-9a-fA-F]{2})*$/`
+ * backtracks once per byte and threw `RangeError: Maximum call stack size exceeded` above about
+ * 4 MiB — inside the response size cap, so a large document failed at every endpoint in turn and was
+ * served as a 502 that blamed the endpoints (F4, the 2026-11-20 review). One pass, no recursion, and
+ * the first character that is not a hex digit throws `bad-response`.
+ */
 export function hexToBytes(hex: string): Uint8Array {
-  if (!/^0x([0-9a-fA-F]{2})*$/.test(hex)) throw new GatewayError("bad-response", "result is not hex");
+  if (hex.length < 2 || hex.charCodeAt(0) !== 0x30 || hex.charCodeAt(1) !== 0x78) {
+    throw new GatewayError("bad-response", "result is not hex");
+  }
+  if (hex.length % 2 !== 0) throw new GatewayError("bad-response", "result is not hex");
   const out = new Uint8Array((hex.length - 2) / 2);
-  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(2 + i * 2, 4 + i * 2), 16);
+  for (let i = 0; i < out.length; i++) {
+    const hi = NIBBLE[hex.charCodeAt(2 + i * 2)] ?? -1;
+    const lo = NIBBLE[hex.charCodeAt(3 + i * 2)] ?? -1;
+    if (hi < 0 || lo < 0) throw new GatewayError("bad-response", "result is not hex");
+    out[i] = (hi << 4) | lo;
+  }
   return out;
 }
 
@@ -112,11 +146,18 @@ export function decodeRequestResult(data: Uint8Array): RequestResult {
   const base = list + WORD;
   const text = new TextDecoder("utf-8", { fatal: true });
   const headers: [string, string][] = [];
+  let headerBytes = 0;
   try {
     for (let i = 0; i < count; i++) {
       const pair = base + uint(data, base + i * WORD);
       const key = bytesAt(data, pair + uint(data, pair));
       const value = bytesAt(data, pair + uint(data, pair + WORD));
+      /* Summed and checked before either is decoded: decoding is where the bytes are copied, so a
+         bound applied afterwards would already have paid for the allocation it exists to refuse. */
+      headerBytes += key.length + value.length;
+      if (headerBytes > MAX_HEADER_BYTES) {
+        throw new GatewayError("bad-response", `header text exceeds ${MAX_HEADER_BYTES} bytes`);
+      }
       headers.push([text.decode(key), text.decode(value)]);
     }
   } catch (e) {

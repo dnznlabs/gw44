@@ -4,7 +4,7 @@ Status: in progress · updated 2026-11-20
 
 The spike's prototype works in one browser engine on one machine. This milestone makes it something a stranger can clone, verify and deploy: the same behaviour proven in three engines and in CI, limits enforced rather than assumed, a build whose output can be checked against the source, and a security review of record. It comes first because M02 publishes whatever this leaves.
 
-No new features. Everything here is a property the prototype claims and has not yet proven.
+One new feature, the pinned build (criterion 12), moved here from M05 on 2026-11-20 because it needs nothing M02 provides. Everything else is a property the prototype claims and has not yet proven.
 
 ## Acceptance criteria
 
@@ -18,11 +18,13 @@ No new features. Everything here is a property the prototype claims and has not 
 8. The decoder fuzz test runs at least 1,000,000 inputs in CI and throws nothing but `GatewayError`.
 9. The bare base URL, which names no contract, shows a page that says what gw44 is and how to form a URL, with no script beyond the shell's.
 10. `SECURITY.md` records a two-leg review of `src/` at a named commit, with every finding dispositioned.
-11. `docs/DEPLOY.md` takes a reader from `make build` to a working static host, for one named host, including the unknown-path rule and the wildcard DNS and certificate the host form needs. Checked by following it.
+11. `docs/DEPLOY.md` takes a reader from `make build` to a working static host, for one named host, including the unknown-path rule and the wildcard DNS and certificate the host form needs, and separately takes the owner of one contract from a pinned build to that contract on a domain of their own. Checked by following it.
+12. A pinned build, made by one documented `make` invocation naming a chain id and an address, writes the same three files and serves that contract's `html()` at `/` and its `request()` at every other path on any hostname, loopback or not. It honours neither the host form nor the path form, so no URL makes it serve another contract. Shown by a browser test in three engines on a hostname that is not of the host form, and by `make verify` comparing the pinned build's bytes with the chain's for the fixture. Criteria 5 and 6 hold for it.
 
 ## Out of scope
 
-- Any public deployment, domain or DNS: M02.
+- Any public deployment, domain or DNS: M02. That includes putting rake, or anything else, on a real domain with a pinned build: this milestone ships the build and its instructions, and the owner deploys.
+- A pinned build that serves more than one contract, or that takes its contract from a name: M05.
 - A loader or an edge function for embeds: M03.
 - Quorum or proof verification: M04.
 - A cache: ruled out, roadmap decision 8.
@@ -48,7 +50,8 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 
 | Task | Goal | Status |
 |:-----|:-----|:-------|
-| m01-t04 | The base-URL page and `docs/DEPLOY.md` (criteria 9, 11) | not started |
-| m01-t05 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
+| m01-t04 | The pinned build: one contract at any hostname (criterion 12) | not started |
+| m01-t05 | The base-URL page and `docs/DEPLOY.md` (criteria 9, 11) | not started |
+| m01-t06 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.

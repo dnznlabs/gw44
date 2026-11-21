@@ -19,7 +19,7 @@ Three files: `index.html`, its copy `404.html`, and `gw44-sw.js`. The first visi
 Two boundaries worth knowing before you choose what to put on the domain:
 
 - **The chains of one project share one origin** (roadmap decision 9). Built for several chains, the gateway serves each under `/<chain>/`. That is a path, not a browser boundary: the chains share storage, the service worker registration and any wallet permission the visitor has granted. Each chain is only as safe as the weakest contract configured beside it.
-- **Testnet contracts do not belong on a project's mainnet origin** (roadmap decision 11). They would share all of the above with the mainnet application, under a key usually held more loosely. Deploy testnets to a separate hostname.
+- **A testnet contract belongs on your mainnet origin only if the same owner controls it** (roadmap decision 11). It shares all of the above with the mainnet application, and a testnet owner key is usually held more loosely than a mainnet one. If your testnet contract is owned by the same account as your mainnet contract, under the same signers and threshold, you may list its chain beside the mainnet ones; otherwise deploy testnets to a separate hostname. When you do list one, put a mainnet chain first in the chains file once you have one, because the first chain is where `/` lands, and make sure your application says which network it is showing.
 
 ## 2 — Before you start
 

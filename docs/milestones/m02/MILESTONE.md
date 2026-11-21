@@ -4,7 +4,7 @@ Status: in progress · updated 2026-11-21
 
 A project deploys its own gateway to GitHub Pages from its own repository by calling one workflow, and `rake.dnzn.dev` is the first to do it. It comes now because M01 leaves a build nobody has put on a real static host: every claim so far was measured against `tools/serve.ts` on loopback.
 
-The milestone starts when M01 is done. Its last criterion closes in rake's repository, on rake's schedule, because it needs rake's mainnet addresses.
+The milestone starts when M01 is done. Its last criterion closes in rake's repository, on rake's schedule: the first deploy serves rake's two testnets and no longer waits for mainnet addresses (decision 11 as amended 2026-11-21), and the criterion is met when the mainnet chains are on the site.
 
 ## Acceptance criteria
 
@@ -15,7 +15,7 @@ The milestone starts when M01 is done. Its last criterion closes in rake's repos
 5. **The browser's own requests cost no call.** On a deployed multi-chain site `/favicon.ico` is answered without an `eth_call`. A one-contract build asks its contract for every path, that one included, so `docs/DEPLOY.md` tells its owner to declare an icon in the document, which stops the browser asking; #36 closes with that sentence. Amended 2026-11-20: the first wording asked the same of a one-contract build, which needs a change to reviewed code for one call per page load.
 6. **`docs/DEPLOY.md`** takes the owner of a project from nothing to a deployed gateway on their own domain: the configuration file, the chains file and choosing endpoints, the DNS record, the Pages settings, the workflow call, the static copies, and how to check the result. Checked by following it for the test site, by someone who did not write it.
 7. **Phones.** The test site opens and shows the application in the in-app browser of one mobile wallet and in mobile Safari, recorded with the date, the device and the versions.
-8. **`rake.dnzn.dev`.** Deployed from rake's repository by the workflow of criterion 3, serving rake's `App` on every mainnet chain rake is deployed to, with the static widget copies of criterion 4; criterion 1's script and criterion 2's comparison pass against it. This criterion is met by rake's m05-t04 and is checked there.
+8. **`rake.dnzn.dev`.** Deployed from rake's repository by the workflow of criterion 3, serving rake's `App` on every mainnet chain rake is deployed to, with the static widget copies of criterion 4; criterion 1's script and criterion 2's comparison pass against it. Amended 2026-11-21: the site may be deployed first with rake's two testnets and gain each mainnet chain as rake deploys to it (decision 11 as amended); a mainnet chain is the default from the first one configured, and the criterion is met when every mainnet chain is served. This criterion is met by rake's m05-t04 and is checked there.
 
 ## Out of scope
 
@@ -23,7 +23,7 @@ The milestone starts when M01 is done. Its last criterion closes in rake's repos
 - The loader for embeds read from the chain: M03. Criterion 4's static copies are what a project uses until then.
 - Quorum or proof verification of endpoints: M04. `docs/DEPLOY.md` says what a deployer is trusting when they pick endpoints.
 - Any host but GitHub Pages. The build is three static files and runs elsewhere; this milestone proves one.
-- Testnet contracts on a project's mainnet origin. Decision 11.
+- Testnet contracts on a project's mainnet origin where their owner is not the mainnet one. Decision 11.
 - rake's own work: its `gw44.json`, its chain list, its workflow file and its DNS are rake's m05-t04.
 
 ## Needs from the Product Owner
@@ -33,13 +33,13 @@ The first is filed. The others become issues assigned to the Product Owner when 
 - **Action: Pages for the test site** ([#51](https://github.com/dnznlabs/gw44/issues/51)). The hostname is `gw-test.dnzn.dev` (roadmap decision 12) and its DNS record is in place, as is `rake.dnzn.dev`'s (both read 2026-11-21). Still to do: Pages enabled on this repository with GitHub Actions as the source, that custom domain and HTTPS enforced; and `dnzn.dev` verified for the organisation, because a record pointing at GitHub Pages with no site behind it can be claimed by anyone's. Needed by m02-t01.
 - **Action: a read-only deploy key and Actions access** ([#86](https://github.com/dnznlabs/gw44/issues/86)). While `gw44` is private, a workflow running in another repository cannot check it out with its own token or call a workflow here without them. Needed by m02-t02 step 3.
 - **Action: criterion 7**, on a phone.
-- **Focus.** Criterion 8 is work in rake's repository. It starts when rake's mainnet addresses exist and the focus allows work there.
+- **Focus.** Criterion 8 is work in rake's repository. It starts on rake's two testnets when the focus allows work there, and closes when rake's mainnet chains are on the site.
 
 ## Where it stands
 
 Updated 2026-11-21. Criteria 1 to 7 are met on the test site, `https://gw-test.dnzn.dev`. Open before the milestone can close:
 
-- **Criterion 8, `rake.dnzn.dev`**, which is rake's m05-t04 and waits on rake's mainnet addresses.
+- **Criterion 8, `rake.dnzn.dev`**, which is rake's m05-t04. Its first deploy can run now on rake's two testnets; it closes when rake's mainnet chains are served.
 - **[#85](https://github.com/dnznlabs/gw44/issues/85), and a section of the deploy guide to correct.** Roadmap decision 14 (2026-11-21): a redeploy does reach a returning visitor by navigating, and nothing is built for it. `docs/DEPLOY.md` § 8 and m02-t02's handoff still say the opposite and are corrected in one Markdown change; one reading on GitHub Pages with the browser left open is taken at the next deploy that changes the worker.
 - **The deploy step fails more often than it should**: three of eight runs through the reusable workflow deployed, for a reason inside GitHub's deploy action that an in-job retry now covers ([#111](https://github.com/dnznlabs/gw44/pull/111)). The two runs since both deployed on the first attempt; two is not a rate.
 - **Carried issues labelled `m02`** that are not yet placed: [#77](https://github.com/dnznlabs/gw44/issues/77), [#107](https://github.com/dnznlabs/gw44/issues/107), [#109](https://github.com/dnznlabs/gw44/issues/109), [#110](https://github.com/dnznlabs/gw44/issues/110). Each is fixed, moved or dropped with a reason at the close-out.

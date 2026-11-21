@@ -44,7 +44,7 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 |:-----|:-----|:-------|
 | [m01-t01](tasks/m01-t01/TASK.md) | CI running `make check`; Firefox and WebKit in `make e2e` (criteria 1, 2) | done ([#8](https://github.com/dnznlabs/gw44/pull/8)) |
 | [m01-t02](tasks/m01-t02/TASK.md) | Size cap, timeout and failover each under test; fuzz count raised (criteria 7, 8) | in progress |
-| m01-t03 | `make verify` against the live fixture; reproducible build with printed hashes (criteria 3, 4, 5, 6) | not started |
+| [m01-t03](tasks/m01-t03/TASK.md) | `make verify` against the live fixture; reproducible build with printed hashes (criteria 3, 4, 5, 6) | not started |
 
 ### Phase 2 — Make it handable
 

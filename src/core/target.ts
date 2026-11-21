@@ -15,6 +15,14 @@ export interface Target {
   redirect?: string;
 }
 
+/** One contract, compiled into the build. The chain's endpoints are compiled in beside it. */
+export interface Pin {
+  /** Decimal chain id, no leading zeros. */
+  chain: string;
+  /** Lower-case, 0x-prefixed, 20 bytes. */
+  address: string;
+}
+
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 const CHAIN = /^[1-9][0-9]{0,15}$/;
 
@@ -67,6 +75,41 @@ export function parseTarget(url: URL): Target | null {
   const target: Target = { chain, address, resource: trimRoot(rest), params };
   if (rest.length === 0) target.redirect = `${url.pathname}/${url.search}`;
   return target;
+}
+
+/**
+ * `<chain>:<address>`, the pin as a build gives it. Throws rather than returning null: a URL that
+ * names no contract is ordinary and a malformed pin is a mistake, so the two must not look alike.
+ */
+export function parsePin(text: string): Pin {
+  const parts = text.split(":");
+  const [chain, rawAddress] = parts;
+  if (parts.length !== 2 || chain === undefined || rawAddress === undefined) {
+    throw new GatewayError("bad-target", `pin must be <chain>:<address>; got ${JSON.stringify(text)}`);
+  }
+  const address = rawAddress.toLowerCase();
+  if (!CHAIN.test(chain)) {
+    throw new GatewayError("bad-target", `pin chain must be a decimal chain id; got ${JSON.stringify(chain)}`);
+  }
+  if (!ADDRESS.test(address)) {
+    throw new GatewayError("bad-target", `pin address must be 0x and 40 hex digits; got ${JSON.stringify(rawAddress)}`);
+  }
+  return { chain, address };
+}
+
+/**
+ * The target of a URL in a pinned build: always the pinned contract, whatever the URL says. The
+ * hostname is never read, so every origin serves the one contract, and the whole path is the
+ * resource — a path that would be the path form elsewhere is just a path here, which is what keeps
+ * `/<chain>/<address>/` from reaching a second contract.
+ */
+export function pinnedTarget(url: URL, pin: Pin): Target {
+  return {
+    chain: pin.chain,
+    address: pin.address,
+    resource: trimRoot(segments(url.pathname)),
+    params: [...url.searchParams.entries()],
+  };
 }
 
 /** `/` splits to one empty segment; the root is the empty resource. */

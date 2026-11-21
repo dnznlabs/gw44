@@ -69,6 +69,13 @@ jobs:
           pb="$RUNNER_TEMP/pinned-b"
           devbox run -- bash -c "GW44_PIN='$pin' GW44_OUT='$pa' node tools/build.ts && GW44_PIN='$pin' GW44_OUT='$pb' node tools/build.ts"
           diff -r "$pa" "$pb"
+          # A configured build is a third deployable: more than one chain compiled in, so more than
+          # one chain's endpoints and a default to get wrong.
+          cfg=test/fixtures/gw44.two-chains.json
+          ca="$RUNNER_TEMP/config-a"
+          cb="$RUNNER_TEMP/config-b"
+          devbox run -- bash -c "GW44_CONFIG='$cfg' GW44_OUT='$ca' node tools/build.ts && GW44_CONFIG='$cfg' GW44_OUT='$cb' node tools/build.ts"
+          diff -r "$ca" "$cb"
           deps=$(devbox run -- npm ls --omit=dev --parseable | wc -l)
           if [ "$deps" -ne 1 ]; then
             echo "npm ls --omit=dev printed $deps lines; the deployable must have no runtime dependencies:"

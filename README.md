@@ -96,6 +96,7 @@ make verify         # Prove the gateway serves what a live chain returns (networ
 make browsers       # Install Playwright's browsers for ENGINES
 make get URL=<url>  # Resolve one gateway URL without a browser
 make build PIN=…    # Build for one contract only (see The pinned build)
+make build CONFIG=… # Build for one project's contract on each of several chains
 make help           # List every command
 ```
 
@@ -120,6 +121,37 @@ Only the pinned chain's endpoints are compiled in. Point `GW44_CHAINS` at a file
 ```bash
 GW44_CHAINS=my-chains.json make build PIN=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
 ```
+
+### Several chains: the configuration file
+
+A project deployed to more than one chain names its contract on each, by convention in a `gw44.json` in its own repository:
+
+```json
+{
+  "default": "1",
+  "contracts": {
+    "1": "0x00a9f390a6010d045e0d34856048ddd6910d25ba",
+    "8453": "0x00d19609f2349d4160d2babaf46b0cd1ec6d7f8e"
+  }
+}
+```
+
+```bash
+make build CONFIG=gw44.json
+```
+
+The URL layout follows the count, and only the configured chains' endpoints are compiled in:
+
+| Configuration | `/` | `/<chain>/` | anything else |
+|:--|:--|:--|:--|
+| One contract | the contract's `html()` | a resource of that contract | a resource of that contract |
+| Several | redirects to `/<default>/` (302) | that chain's contract | 404, with no call to any chain |
+
+With one contract the build is byte-identical to the equivalent `PIN=<chain>:<address>`, so a project that grows a second chain changes its configuration file and nothing else.
+
+**An application served under `/<chain>/` must use relative URLs.** An absolute `/widget.js` leaves the prefix, reaches no configured chain and is answered with a 404 rather than being quietly served from the default chain — which is the point: a document must not be able to read another chain's contract by accident.
+
+**The chains of one project share an origin**, so the browser gives them one storage area, one service worker registration and one set of wallet permissions. An application that keeps per-chain state must separate it by chain id itself; nothing in the origin does that for it. One project per origin is the deliberate boundary — two projects never share one, so no project's storage is reachable from another's document.
 
 An owner can put the result on a domain of their own, with no dependence on a public gateway existing. What the host has to do is serve those three files over HTTPS and answer every unknown path with `index.html` — on GitHub Pages, `404.html` already does this. No wildcard DNS and no wildcard certificate are needed, because one pinned deployment is one hostname.
 

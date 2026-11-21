@@ -194,23 +194,50 @@ test("path form without the trailing slash redirects to it", async () => {
   await context.close();
 });
 
-/* Chromium only: the forced reload is driven through the Chrome DevTools Protocol, which Playwright
-   exposes on Chromium alone. Firefox and WebKit have no equivalent for "reload ignoring cache". */
+/* Chromium only, and measured rather than assumed (#11). The state this case needs is a loaded page
+   whose `navigator.serviceWorker.controller` is null while a registration still exists, which is
+   what a user's hard reload produces. Four portable ways were tried in all three engines — a plain
+   `page.reload()`, `Control+Shift+R`, `Meta+Shift+R`, and a cache-busting navigation — and none
+   reached it anywhere, in Chromium either: a keyboard shortcut for a hard reload is browser chrome,
+   which a headless page never receives. Only CDP's `Network.setBypassServiceWorker` does it, and
+   Playwright exposes CDP on Chromium alone. `SECURITY.md` carries the consequence. */
 test("a forced reload bypasses the worker and still ends on the document", {
   skip: isChromium
     ? false
-    : `${engineName}: drives the Chrome DevTools Protocol, which Playwright exposes on Chromium only`,
+    : `${engineName}: needs a load that is uncontrolled with a registration present, reachable only through CDP`,
 }, async () => {
   const context = await fresh();
   const page = await context.newPage();
   await page.goto(path());
   await page.waitForSelector("#v");
 
-  const cdp = await context.newCDPSession(page);
-  await cdp.send("Page.reload", { ignoreCache: true });
-  await page.waitForSelector("#gw44", { state: "detached" });
-  await page.waitForSelector("#v");
+  /* Recorded at document start rather than polled afterwards. The state only exists between the
+     reload and the shell's recovery, and the shell recovers in milliseconds, so waiting for the
+     shell's element and then reading was a race that the document usually won. `sessionStorage`
+     survives the navigation and the shell's `document.write`. */
+  await context.addInitScript(() => {
+    sessionStorage.setItem("gw44-controlled", String(navigator.serviceWorker.controller !== null));
+    void navigator.serviceWorker.getRegistrations().then((regs) => {
+      sessionStorage.setItem("gw44-registrations", String(regs.length));
+    });
+  });
 
+  /* `Page.reload {ignoreCache: true}` bypasses the HTTP cache and not the worker: measured, the
+     reloaded page was still controlled, `workerStart` was 0.6 ms and the chain saw the two calls
+     the worker makes. `Network.setBypassServiceWorker` is the one that produces the state a user's
+     hard reload produces — controller null, `workerStart` 0, registration still present. */
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Network.enable");
+  await cdp.send("Network.setBypassServiceWorker", { bypass: true });
+  await cdp.send("Page.reload", { ignoreCache: true });
+  await page.waitForSelector("#v");
+  const atStart = await page.evaluate(() => ({
+    controlled: sessionStorage.getItem("gw44-controlled"),
+    registrations: sessionStorage.getItem("gw44-registrations"),
+  }));
+
+  // The point of the case: the reloaded page was not controlled, and the registration was still there.
+  assert.deepEqual(atStart, { controlled: "false", registrations: "1" });
   assert.equal(await page.textContent("#v"), "v1");
   await context.close();
 });

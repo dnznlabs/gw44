@@ -68,7 +68,22 @@ test("a header count above the cap is refused before any header is read", () => 
   assert.throws(() => decodeRequestResult(data), /too many headers/);
 });
 
+/* The run count is `GW44_FUZZ_RUNS`, default 20,000 so `make test` stays quick; CI sets 1,000,000.
+   A value that is not a positive integer fails rather than silently falling back, because a typo in
+   the workflow would otherwise turn the million into the default and nobody would notice. */
+function fuzzRuns(): number {
+  const raw = process.env["GW44_FUZZ_RUNS"];
+  if (raw === undefined || raw === "") return 20_000;
+  const runs = Number(raw);
+  assert.ok(
+    Number.isInteger(runs) && runs > 0,
+    `GW44_FUZZ_RUNS must be a positive integer; got ${JSON.stringify(raw)}`,
+  );
+  return runs;
+}
+
 test("no bytes a contract can return make the decoders throw anything but GatewayError", () => {
+  const runs = fuzzRuns();
   // Deterministic xorshift, so a failure names a reproducible input.
   let seed = 0x9e3779b9;
   const next = (): number => {
@@ -79,7 +94,7 @@ test("no bytes a contract can return make the decoders throw anything but Gatewa
   };
   const valid = [htmlResult("hello"), requestResult(200, "body", [["Content-Type", "text/plain"], ["a", "b"]])];
 
-  for (let i = 0; i < 20_000; i++) {
+  for (let i = 0; i < runs; i++) {
     const base = valid[i % 2] as Uint8Array;
     // Half the runs mutate a valid encoding, which reaches deeper than noise does.
     const data = i % 4 < 2 ? base.slice(0, next() % (base.length + 1)) : new Uint8Array(next() % 400);
@@ -89,7 +104,7 @@ test("no bytes a contract can return make the decoders throw anything but Gatewa
       try {
         decode(data);
       } catch (error) {
-        assert.ok(error instanceof GatewayError, `run ${i}: ${String(error)}`);
+        assert.ok(error instanceof GatewayError, `run ${i} of ${runs}: ${String(error)}`);
       }
     }
   }

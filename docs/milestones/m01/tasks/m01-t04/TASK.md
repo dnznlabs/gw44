@@ -41,7 +41,7 @@ Measured at scoping, 2026-11-20, on `main` at `4ac4e64`:
    - #29: the size gate reads the byte length of `gw44-sw.js` from disk, which the hash loop already has. `tools/verify.sh` reads word 0 of `request()`'s return and reports `MISMATCH` unless it is 200. Run `make verify` once with `decodeRequestResult` in `src/core/abi.ts` made to drop the body's last byte, confirm `MISMATCH` on the widget lines and a non-zero exit, restore, and name the output in `HANDOFF.md`; commit nothing from that run. For the status word, run with `VERIFY_ADDRESS` and a resource the fixture answers with a status other than 200 if one can be reached by an environment variable without new code; if not, show the branch failing by a temporary edit of the expected status and say so.
    - #30: one line in `AGENTS.md` § Gotchas, as the issue words it, extended to say a pin changes all three files too.
    - `Closes #26`, `Closes #28`, `Closes #29`, `Closes #30` in the PR.
-9. **Docs.** `README.md` gains a short section on the pinned build: the command, what it serves, that the chains file can be the owner's own (`GW44_CHAINS`), and that hosting instructions are in `docs/DEPLOY.md` once m01-t05 writes it. `AGENTS.md` § Commands lists `PIN`.
+9. **Docs.** `README.md` gains a short section on the pinned build: the command, what it serves, that the chains file can be the owner's own (`GW44_CHAINS`), and what the host must do: serve the three files over HTTPS and answer every unknown path with `index.html` (on GitHub Pages, `404.html` does this). No wildcard DNS or certificate is needed. `AGENTS.md` § Commands lists `PIN`.
 
 ## Acceptance criteria
 
@@ -54,7 +54,7 @@ Measured at scoping, 2026-11-20, on `main` at `4ac4e64`:
 
 ## Out of scope
 
-- Deploying a pinned build anywhere, for rake or anything else, and `docs/DEPLOY.md`: m01-t05 writes the instructions and the owner deploys.
+- Deploying a pinned build anywhere, for rake or anything else, and `docs/DEPLOY.md`, which M02 writes: the owner deploys, from the README section of step 9.
 - A pin on more than one contract, a pin by name, or a pin read at run time from a file, a header or the URL. The pin is compiled in, as the endpoints are.
 - Changing what `/gw44-sw.js`, `/index.html` or `/404.html` do on a contract's origin.
 - Any change to the unpinned URL forms, to `isLoopback`, or to `src/core/resolve.ts` and `src/core/abi.ts` beyond the temporary edit in step 8.

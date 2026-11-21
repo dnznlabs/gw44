@@ -18,7 +18,7 @@ One new feature, the pinned build (criterion 12), moved here from M05 on 2026-11
 8. The decoder fuzz test runs at least 1,000,000 inputs in CI and throws nothing but `GatewayError`.
 9. The bare base URL, which names no contract, shows a page that says what gw44 is and how to form a URL, with no script beyond the shell's.
 10. `SECURITY.md` records a two-leg review of `src/` at a named commit, with every finding dispositioned.
-11. `docs/DEPLOY.md` takes a reader from `make build` to a working static host, for one named host, including the unknown-path rule and the wildcard DNS and certificate the host form needs, and separately takes the owner of one contract from a pinned build to that contract on a domain of their own. Checked by following it.
+11. Moved to M02 on 2026-11-20. It asked for `docs/DEPLOY.md`, checked by following it, and following it is a public deployment, which this milestone rules out. The guide is written in M02 by making the deployment it describes. A pinned build's instructions for this milestone are the README section m01-t04 adds.
 12. A pinned build, made by one documented `make` invocation naming a chain id and an address, writes the same three files and serves that contract's `html()` at `/` and its `request()` at every other path on any hostname, loopback or not. It honours neither the host form nor the path form, so no URL makes it serve another contract. Shown by a browser test in three engines on a hostname that is not of the host form, and by `make verify` comparing the pinned build's bytes with the chain's for the fixture. Criteria 5 and 6 hold for it.
 
 ## Out of scope
@@ -51,7 +51,7 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 | Task | Goal | Status |
 |:-----|:-----|:-------|
 | [m01-t04](tasks/m01-t04/TASK.md) | The pinned build: one contract at any hostname (criterion 12) | not started |
-| m01-t05 | The base-URL page and `docs/DEPLOY.md` (criteria 9, 11); carried #11 and #27 | not started |
+| [m01-t05](tasks/m01-t05/TASK.md) | The base-URL page (criterion 9); carried #11 and #27 | not started |
 | m01-t06 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.

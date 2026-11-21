@@ -52,20 +52,13 @@ Open. Each is a `decision` issue, linked from its title.
 - *Default and deadline.* No cache; nothing waits on it, and the default stands when M01 closes.
 - *Record.* Here.
 
-**D4 — How an owner's own domain reaches their contract** ([#5](https://github.com/dnznlabs/gw44/issues/5)).
-- *Question.* The working assumption is that an owner points a CNAME at their contract's gateway host. On static hosting that does not work by itself; which route does gw44 offer?
-- *Options.* (1) A pinned build: the owner hosts the two files on their own domain, built to serve one contract at any hostname. No server, no dependence on the public gateway; the owner does a deploy rather than a DNS edit. (2) CNAME to the public gateway, with certificates issued on demand by the host. A DNS edit for the owner; a hosting service or a server for the operator, and a DNS lookup in the browser to learn which contract the hostname means. (3) Both.
-- *Recommendation.* The pinned build first: it is the only route that keeps the gateway static, and it removes the operator from the owner's trust. CNAME if a host with on-demand certificates is chosen in M02 anyway.
-- *Default and deadline.* The pinned build, in M05. Blocks M05 only, though the choice of host in M02 decides whether option 2 stays cheap.
-- *Direction, 2026-11-20.* Option 2 is not M05 work. It is M06: a paid on-chain registry, with certificates for registered domains issued by automation off chain. Whether the pinned build ships in M05 is not ruled; the default stands.
-- *Record.* Here.
-
 Closed.
 
 1. **TypeScript, not Rust and WebAssembly** (2026-11-20, from spike 001). The gateway's own work is 1.4 ms beside an RPC round trip of 120–500 ms. Reopened by M04 if proof verification is chosen there.
 2. **`/` is `html()` and only `html()`.** A contract without it is not served at the root, even if its `request()` would answer. ERC-8244 is the scope; a fallback would make the gateway a general ERC-5219 one.
 3. **The path form is loopback-only.** On a public host it would put every contract in one origin.
 4. **RPC endpoints are compiled in.** Never taken from a URL, and never fetched at run time.
+5. **An owner's own domain is served by a pinned build** (2026-11-20, [#5](https://github.com/dnznlabs/gw44/issues/5)). The owner hosts the two files on their own domain, built to serve one contract at any hostname; it ships in M05. Pointing an outside domain at the public gateway is M06: a paid on-chain registry, with certificates issued by automation off chain. Rejected for now: certificates on demand with no registry, which makes the operator answerable for any domain anyone points at it.
 
 ## Findings carried forward
 

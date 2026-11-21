@@ -89,6 +89,7 @@ Alpha software. Nothing here has been reviewed by anyone but its authors, and th
 
 | DOCUMENT | DESCRIPTION |
 |----------|-------------|
+| [Deploy](docs/DEPLOY.md) | From nothing to a gateway on your own domain: the configuration, DNS and Pages, the workflow a project calls, embeds, and the failures already met |
 | [Roadmap](docs/ROADMAP.md) | Milestones, decisions and status |
 | [Spike 001](docs/spikes/001-static-gateway.md) | Whether a gateway with no backend works, measured |
 | [Security](SECURITY.md) | Trust model, the review of record and its findings, what the gateway defends and what it does not |
@@ -132,6 +133,8 @@ Only the pinned chain's endpoints are compiled in. Point `GW44_CHAINS` at a file
 ```bash
 GW44_CHAINS=my-chains.json make build PIN=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
 ```
+
+Putting the result on a domain of your own — the repository, the DNS record, the Pages settings, the workflow your repository calls and what to check afterwards — is [docs/DEPLOY.md](docs/DEPLOY.md). A one-contract build asks its contract for **every** path, the browser's own `/favicon.ico` included, so § 9 there is worth reading before you deploy one.
 
 ### Several chains: the configuration file
 

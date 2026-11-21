@@ -110,7 +110,14 @@ devbox run -- make get URL="https://anything.invalid/<chain>/" CONFIG=/path/to/y
 # content-security-policy: frame-ancestors 'self'
 ```
 
-The hostname is ignored under a configuration, so any URL will do; what you are reading is the status and the size. A contract that does not serve that path answers `404 47 B` with `text/plain`, and **the command still exits 0**, so read the status line rather than the exit code.
+The hostname is ignored under a configuration, so any URL will do; what you are reading is the status and the size. **The command exits 0 either way**, so read the status line rather than the exit code — and the two failures look different, which is useful:
+
+| Reading | What it is |
+|:--|:--|
+| `404 0 B` with `application/octet-stream` | your contract answered 404 itself for that path. The status and the type are the contract's; the gateway passed them through |
+| `404 47 B` with `text/plain` and a body of `gw44: the address does not serve this resource` | nothing answered at that address on that chain — no code, or a contract that does not implement the call. The sentence is the gateway's own |
+
+The second is the one that means your configuration names the wrong address or the wrong chain.
 
 Everything in §§ 7 and 9 that starts with `make` is run from that checkout too.
 
@@ -160,6 +167,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read      # see below; the called workflow lists this run's artifacts
 
 concurrency:
   group: pages
@@ -167,9 +175,9 @@ concurrency:
 
 jobs:
   deploy:
-    uses: dnznlabs/gw44/.github/workflows/deploy-pages.yml@a0f6f097134e6b96f97f35f1d1797bf062784cab
+    uses: dnznlabs/gw44/.github/workflows/deploy-pages.yml@3ee50fe2de7073f8dac66898e83f961bc88b8b8b
     with:
-      gw44-ref: a0f6f097134e6b96f97f35f1d1797bf062784cab
+      gw44-ref: 3ee50fe2de7073f8dac66898e83f961bc88b8b8b
       config: gw44.json
       chains: chains.json
       embeds: widget.js
@@ -187,6 +195,8 @@ This repository's own caller is [`.github/workflows/pages-test.yml`](../.github/
 | `embeds` | Space-separated resource paths to publish as static copies. See § 6. Omit it if no other site embeds anything of yours. |
 | `expect` | Optional. The three hash lines the build must print, verbatim. Any difference fails the run **before** anything is deployed. |
 | `verify-only` | Optional. Build and check, deploy nothing. The way to exercise the whole path without replacing a live site. |
+
+**`actions: read` is not optional, and it is the one a caller forgets.** The called workflow lists this run's artifacts to wait for the one it just uploaded, and a called workflow's token is capped by its caller's grant — so a caller that grants only the other three gets a failure inside the wait, about an artifacts call, which does not read as a permissions problem. It is needed from commit `3ee50fe` of this repository onwards.
 
 **Pin the commit twice.** `uses:` pins the workflow; `gw44-ref` pins the source it builds. They should be the same commit, and nothing inside the workflow can check that — `uses:` is resolved by GitHub before the job starts and is not readable from inside it.
 
@@ -252,11 +262,12 @@ The host page then trusts the **bytes**, not your site: if the file differs from
 To check a published copy against a hash you were given, without a deploy log:
 
 ```bash
-curl -fsS https://your-host/1/widget.js | openssl dgst -sha384 -binary | openssl base64 -A
+curl -fsS https://your-host/1/widget.js -o /tmp/embed.js \
+  && openssl dgst -sha384 -binary /tmp/embed.js | openssl base64 -A
 # the base64 after `sha384-` in the snippet
 ```
 
-**`-f` is load-bearing.** Without it, a wrong path hashes the host's 404 page — which on this host is the shell, so you get a confident `sha384-…` of the wrong bytes. With it, `curl` exits non-zero and prints nothing.
+**Two bytes of that command are load-bearing.** Without `-f`, a wrong path hashes the host's 404 page — which on this host is the shell, so you get a confident `sha384-…` of the wrong bytes. And **a pipeline is not enough even with `-f`**: `curl` exits non-zero but `openssl` still runs, on nothing, and prints `OLBgp1GsljhM2TJ+sbHj…`, which is the sha384 of the empty string and looks like any other answer. Hence the file and the `&&`: on a wrong path you get `curl: (22) The requested URL returned error: 404` and **no hash at all**.
 
 **So a contract whose script changes needs a redeploy and a new snippet.** The copies are taken at deploy time and do not follow the chain: publish the new bytes, take the new `integrity`, and update every host page that embeds it. Until they are updated those pages run nothing, which is loud rather than silent.
 
@@ -318,7 +329,19 @@ Deploy again and the three files are replaced. What a **returning** visitor sees
 
 Pages' own `etag` is derived from modification time and size rather than from content, and a deploy resets the edge's `age`, so a deploy invalidates the CDN even when the bytes are unchanged.
 
-**How soon a returning visitor sees it is not yet written here, because it has not been measured.** m02-t02 step 4's measurement — a persistent profile across a redeploy, recording on which navigation `/` first ends on the new default and how long after the deploy — is pending on [#105](https://github.com/dnznlabs/gw44/pull/105), and [#85](https://github.com/dnznlabs/gw44/issues/85) is the open question. A figure nobody measured does not go in a runbook; this section gets one sentence and the figure when the measurement lands.
+**How soon a returning visitor sees it, measured.** A persistent browser profile that had the site installed, across a redeploy that changed the default chain, in Chromium on 2026-11-21:
+
+| | |
+|:--|:--|
+| The host served the new bytes | from **56 seconds** after the deploy finished, and at every later reading |
+| Plain navigations to `/` | **eleven over ten and a half minutes, every one on the old default.** The registration stayed `activated` with nothing installing or waiting |
+| A clean window in the other direction, no intervention | **fourteen navigations across sixteen minutes**, every one on the old default — the last at 986 s, past any cache lifetime here |
+| `registration.update()`, called once from the page | returned in **3.1 s** both times it was tried, and the new worker installed and claimed its clients at once |
+| The navigation after that | the **new** default, about a second later, and every navigation after |
+
+Both directions of the change were measured — to the other chain and back — and behaved identically. So the two halves of the mechanism behave very differently. The gateway's own side is immediate: `skipWaiting()` and `clients.claim()` move a returning visitor to the new build about a second after an update check happens. **What does not happen on its own is the check.** Navigating, even repeatedly, did not trigger one in the window measured.
+
+**What to do about it, if propagation matters to you.** Have your document ask for it — `navigator.serviceWorker.getRegistration('/').then(r => r && r.update())` on load — and a returning visitor's next navigation is current. The gateway does not do this for you today ([#85](https://github.com/dnznlabs/gw44/issues/85) carries the measurement and the question of whether it should). Until then, treat "deployed" as "served to new visitors, and to returning ones when something asks".
 
 ## 9 — One contract on one chain
 
@@ -350,7 +373,7 @@ Failures this project has actually met, with the message each one gives.
 | `the build does not match expect; nothing is deployed` | the bytes differ from the `expect` you passed. Compare the printed lines with yours before assuming the build is wrong: a changed `gw44-ref` changes them legitimately. |
 | `gw44-sw.js would be … over the 16384 B limit; nothing was written` | the worker is over its size cap, usually because the chains file compiled in is very large. Nothing was written. |
 | `<dir>/ holds …; the deployable is only 404.html, gw44-sw.js, index.html; run 'make clean'` | something else is in the output directory. The build refuses it rather than deploying a mixture, and writes nothing. |
-| `Found 0 artifact(s)`, right after `Artifact github-pages has been successfully uploaded!` | `actions/deploy-pages` finding no artifact that the REST API lists in the same job. Measured on 2026-11-21: the workflow's own wait found the artifact **on its first try**, and the action reported `Found 0` half a second later, about an artifact still listable a minute afterwards — so it is not a matter of waiting. The action does not use the REST endpoint; it calls the toolkit's internal `ListArtifacts` with the ids carried by the runtime token, which is a different view. [#111](https://github.com/dnznlabs/gw44/pull/111) makes the deploy step try three times in one job and name the attempt that worked, which is what will say whether that view is late or absent. **Do not re-run the failed run**: a re-run uploads a second artifact to the same run and the lookup then fails the other way, `Multiple artifacts … Artifact count is 2`. Dispatch a new run. Upstream: [#451](https://github.com/actions/deploy-pages/issues/451). |
+| `Found 0 artifact(s)`, right after `Artifact github-pages has been successfully uploaded!` | `actions/deploy-pages` finding no artifact that the REST API lists in the same job, **intermittently**: of seven runs through this workflow on 2026-11-21, four failed this way and three deployed. Measured on one failure: the workflow's own wait found the artifact on its **first** try and the action reported `Found 0` half a second later, about an artifact still listable a minute afterwards — so it is not a matter of waiting. The action does not use the REST endpoint; it calls the toolkit's internal `ListArtifacts` with the ids carried by the runtime token, which is a different view. The workflow now makes **three** attempts in one job, 20 s and 60 s apart, and names the one that deployed; both successful deploys since took the first attempt, so the later two are still unexercised. **Do not re-run the failed run**: a re-run uploads a second artifact to the same run and the lookup then fails the other way, `Multiple artifacts … Artifact count is 2`. Dispatch a new run. Upstream: [#451](https://github.com/actions/deploy-pages/issues/451). |
 | `<chain> config root: tools/get.ts failed — MISMATCH (…)` from `make verify`, with a single chain, and `verify: the browser stage failed` under browser lines that all say `ok` | not your deployment: `verify.sh`'s config pass asks `/<chain>/` of a one-contract configuration, and the summary names the wrong stage ([#110](https://github.com/dnznlabs/gw44/issues/110)). The other passes are valid. |
 | Pages shows the site but HTTPS cannot be enforced | the certificate has not been issued yet. It takes a few minutes after the custom domain is set, and the tick box stays disabled until then. `.https_certificate.state` reads `approved` when it is ready. |
 | the deploy succeeds and the site serves someone else's content | the hostname was claimed before you verified the domain. § 2, and it is the reason the order in § 2 is not advice. |

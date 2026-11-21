@@ -9,6 +9,7 @@ PR: #112 · Branch: `m02/t03-deploy-guide` · 2026-11-21
 | AC | Result | Evidence |
 |:---|:-------|:---------|
 | Milestone criterion 6 — `docs/DEPLOY.md` exists with the planned sections | pass | Ten sections in the plan's order, plus a *Not in this guide* section in the runbook shape. § Section → source below maps each to the handoff or issue it came from |
+| The review's three at `0120290` | all three in, in one commit as asked | § 6's recipe now writes to a file and hashes only on success, so a 404 yields **no** hash rather than the sha384 of no bytes; § 5 pins `3ee50fe`, the commit that deployed, and grants `actions: read` in the block and in the prose (#107); § 3 names both 404 readings — `404 0 B application/octet-stream` for a contract answering 404, `404 47 B text/plain` for nothing at the address |
 | Step 2's list of guesses is empty after the fixes, or each remaining one is named with the reason | **pass, with four named** | § The two readers. Reader 1 raised twelve guesses and three imprecisions; reader 2, on the fixed text, raised **one that is self-resolving** (the pointer to this file, which did not exist at the commit it read) and **four that cannot be removed** — each needs a fact only the reader has, or a deploy. It found three further errors, all fixed |
 | Every command and setting appears in a handoff or an issue that ran it | pass | § Section → source, line by line. The four commands the guide introduces that no earlier handoff had run, I ran before writing them: `protected_domain_state`, `https_certificate.state`, the `openssl` hash recipe, and `make get` against a configuration |
 | Milestone criterion 7 — the phone readings are recorded | pass | § Phones, from Denizen's own report on [#106](https://github.com/dnznlabs/gw44/issues/106), with two gaps named rather than smoothed |
@@ -65,11 +66,21 @@ Both were fresh sessions with no context: given the repository, the guide, and t
 
 **One place a reader's own record is imprecise**, checked rather than copied: reader 1's confirmation list names `#83` and `#103` among the guide's citations. The guide cites neither — `grep` gives ten numbers, `#36 #51 #85 #86 #92 #94 #96 #105 #110 #451`, and it was nine before #110. Its count was right and two of its items were not.
 
-## The one number this guide does not carry
+## The number § 8 now carries, and how it was measured
 
-§ 8 says how a redeploy reaches a returning visitor **mechanically** — the worker script's `max-age=600`, `updateViaCache: "none"`, `skipWaiting` and `clients.claim`, and Pages' `etag` and `age` behaviour — and then says plainly that how soon is not yet measured, naming [#85](https://github.com/dnznlabs/gw44/issues/85) and the task that will measure it.
+The guide shipped § 8 without a figure while m02-t02 step 4 was blocked, and the review asked for one commit once a deploy had run on the workflow as it stands. It has, twice, so § 8 carries the measurement:
 
-That is deliberate and the architect confirmed it: m02-t02 step 4's measurement is blocked behind the artifact-lookup failure of `actions/deploy-pages`, now [#111](https://github.com/dnznlabs/gw44/pull/111). **A measured number arrives later by a Markdown-only amendment**; a number nobody measured does not go in a runbook. Both readers reached § 8 and both recorded that declining to print one is the right call.
+| | |
+|:--|:--|
+| The host served the new bytes | **56 s** after the deploy finished, and at every later reading |
+| Plain navigations, deploy 1 (to `84532`) | **eleven over ten and a half minutes**, every one on the old default; the registration `activated` throughout, nothing installing or waiting |
+| Plain navigations, deploy 2 (back to `11155111`), a clean window with no intervention | **fourteen across sixteen minutes**, every one on the old default, the last at 986 s |
+| `registration.update()` from the page | **3,081 ms** and **3,099 ms** on the two occasions; the new worker installed and claimed its clients at once |
+| The navigation after it | the new default, **about a second later**, both times |
+
+**So m02-t02 step 4's stop condition fired, and in both directions**: a returning visitor is still on the old default fifteen minutes after a deploy. It is not the CDN, which served the new bytes from 56 s, and not the gateway, whose `skipWaiting()` and `clients.claim()` move a visitor within a second of a check. It is that **navigating does not cause the check**. [#85](https://github.com/dnznlabs/gw44/issues/85) carries the full reading, and whether `boot.ts` should ask for an update on load is a decision for the architect, not a thing this task changed.
+
+Both readers reached § 8 while it was blank and both recorded that declining to print a number nobody had measured was the right call; the number is here now because somebody measured it.
 
 ## Phones
 

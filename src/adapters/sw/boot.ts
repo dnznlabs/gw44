@@ -3,14 +3,18 @@ import { GatewayError } from "../../core/errors.ts";
 import { resolve } from "../../core/resolve.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
 import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
-import { headersAreHonourable, isRootTarget } from "./fallback.ts";
+import {
+  MAX_ATTEMPTS,
+  attemptsFrom,
+  attemptsValue,
+  headersAreHonourable,
+  isRootTarget,
+} from "./fallback.ts";
 
 // The static host serves this page for every URL. It runs only when the service worker does not
 // control the page: a first visit, a forced reload, or a browser without service workers.
 
 const ATTEMPTS = "gw44:boot";
-const WINDOW_MS = 10_000;
-const MAX_ATTEMPTS = 2;
 const WORKER_MS = 4000;
 
 function say(message: string): void {
@@ -18,17 +22,17 @@ function say(message: string): void {
   if (el) el.textContent = message;
 }
 
-/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page. */
+/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page.
+ *  The reading of the stored value is `fallback.ts`'s, where it is tested without a browser. */
 function attempt(): number {
-  let n = 0;
   try {
-    const [count, at] = (sessionStorage.getItem(ATTEMPTS) ?? "0:0").split(":").map(Number);
-    if (Date.now() - (at ?? 0) < WINDOW_MS) n = count ?? 0;
-    sessionStorage.setItem(ATTEMPTS, `${n + 1}:${Date.now()}`);
+    const now = Date.now();
+    const n = attemptsFrom(sessionStorage.getItem(ATTEMPTS), now);
+    sessionStorage.setItem(ATTEMPTS, attemptsValue(n, now));
+    return n;
   } catch {
     return MAX_ATTEMPTS; // storage blocked: no loop guard, so do not reload at all
   }
-  return n;
 }
 
 const NEEDS_WORKER = "gw44: this page needs a service worker, and this browser is not providing one here.";

@@ -1,8 +1,17 @@
-// The no-worker fallback's two pure decisions (F2 of the 2026-11-20 review). The third, that the
-// page is the top-level one, needs a browser and is in test/e2e/gateway.e2e.ts.
+// The no-worker fallback's pure decisions (F2 of the 2026-11-20 review) and the boot counter it was
+// joined by (#59). The one decision that needs a browser — that the page is the top-level one — is
+// in test/e2e/gateway.e2e.ts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { UNHONOURABLE_HEADERS, headersAreHonourable, isRootTarget } from "../src/adapters/sw/fallback.ts";
+import {
+  ATTEMPT_WINDOW_MS,
+  MAX_ATTEMPTS,
+  UNHONOURABLE_HEADERS,
+  attemptsFrom,
+  attemptsValue,
+  headersAreHonourable,
+  isRootTarget,
+} from "../src/adapters/sw/fallback.ts";
 import type { GatewayResponse } from "../src/core/ports.ts";
 import type { Target } from "../src/core/target.ts";
 import { ADDRESS } from "./helpers.ts";
@@ -54,5 +63,65 @@ test("the list names every header the core can pass that the fallback cannot hon
     "content-disposition",
   ]) {
     assert.ok(UNHONOURABLE_HEADERS.includes(header), header);
+  }
+});
+
+/* The boot counter (#59). The key is session storage, which a rendered contract document shares with
+   the shell, so every case below is a value a document can write. `now` is passed in rather than
+   read from the clock: what the parser decides is a function of the two. */
+const NOW = 1_700_000_000_000;
+
+test("a counter the page wrote itself is read back", () => {
+  assert.equal(attemptsFrom(`0:${NOW}`, NOW), 0);
+  assert.equal(attemptsFrom(`1:${NOW - 100}`, NOW), 1);
+  assert.equal(attemptsFrom(`2:${NOW - ATTEMPT_WINDOW_MS + 1}`, NOW), 2);
+});
+
+test("no counter is a first load, not a spent one", () => {
+  assert.equal(attemptsFrom(null, NOW), 0);
+});
+
+test("a counter older than the window is a fresh visit", () => {
+  assert.equal(attemptsFrom(`9:${NOW - ATTEMPT_WINDOW_MS}`, NOW), 0);
+  assert.equal(attemptsFrom(`2:${NOW - 60_000}`, NOW), 0);
+  // Well formed, and the epoch is as stale as a timestamp gets. The old parser read the same 0 by
+  // arithmetic on a value it had not checked, which is why the two cases look alike and are not.
+  assert.equal(attemptsFrom("0:0", NOW), 0);
+});
+
+/* The property the finding is about: anything that is not a counter stops the reload rather than
+   licensing one. Each on its own, with what the old `split(":").map(Number)` made of it. */
+test("a value that is not a counter is the maximum, so a document cannot cause a loop", () => {
+  const notCounters = [
+    "", // Number("") is 0, and 0 was both the count and a timestamp inside the window
+    "x:y",
+    "0", // no timestamp at all
+    `-1:${NOW}`,
+    `1.5:${NOW}`,
+    `1e0:${NOW}`,
+    `10:${NOW}`, // two digits of count: not a value this page ever writes
+    `0:${NOW} `,
+    ` 0:${NOW}`,
+    `0:0x${NOW.toString(16)}`,
+    `0:${NOW}:${NOW}`,
+    "0:Infinity",
+    "0:NaN",
+  ];
+  for (const stored of notCounters) {
+    assert.equal(attemptsFrom(stored, NOW), MAX_ATTEMPTS, JSON.stringify(stored));
+  }
+});
+
+test("a timestamp in the future is the maximum, so the window cannot be held open", () => {
+  assert.equal(attemptsFrom(`0:${NOW + 1}`, NOW), MAX_ATTEMPTS);
+  assert.equal(attemptsFrom(`0:999999999999999`, NOW), MAX_ATTEMPTS);
+});
+
+/* The pair has to close: a value this page writes is a value it can read, or the guard resets itself
+   every load and the loop it exists to stop comes back. */
+test("what the page writes is what the parser accepts", () => {
+  for (let n = 0; n <= 9; n++) {
+    const written = attemptsValue(n, NOW);
+    assert.equal(attemptsFrom(written, NOW), Math.min(n + 1, 9), written);
   }
 });

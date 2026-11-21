@@ -262,7 +262,7 @@ curl -fsS https://your-host/1/widget.js | openssl dgst -sha384 -binary | openssl
 
 ## 7 — Checking a deployment
 
-Both targets are run from a **checkout of `dnznlabs/gw44`** (§ 3), against the site you deployed. Check it out at the **same commit you deployed** — the one in `gw44-ref` — so that what checks the site is what built it; `git clone` gives you the default branch, which may have moved since. The browser engines are a download of their own, once per checkout:
+Both targets are run from a **checkout of `dnznlabs/gw44`** (§ 3), against the site you deployed. Check it out at the **same commit you deployed** — the one in `gw44-ref` — so that what checks the site is what built it; `git clone` gives you the default branch, which may have moved since. The browser engines are a download of their own — into Playwright's shared cache, `~/.cache/ms-playwright`, so once per **machine** rather than per checkout, and about 1.3 GB for three:
 
 ```bash
 devbox run -- make browsers ENGINES="chromium firefox webkit"

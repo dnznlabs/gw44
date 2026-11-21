@@ -22,6 +22,8 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 
 `make e2e` runs the browser suite once per engine in `ENGINES`, in order, stopping at the first failure; default `ENGINES=chromium`, names `chromium`, `firefox`, `webkit`, and any other name is a failure at load rather than a skip. `make browsers` installs them into Playwright's cache (Chromium as `chromium-headless-shell`). CI runs all three; `.github/workflows/ci.yml` is the gate on every push.
 
+`make build PIN=<chain>:<address>` compiles one contract into the deployable: every URL on the origin serves it, the hostname is never read, and only that chain's endpoints are embedded. `PIN` empty is the ordinary build. `GW44_PIN` is the variable the tools read, and `tools/get.ts` honours it so the pinned path can be resolved without a browser.
+
 **`make verify` is not part of `make check`, and that is deliberate: CI is offline.** It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
 
 ## Conventions
@@ -35,6 +37,7 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 ## Gotchas
 
 - `curl` against the gateway always returns the shell. That is correct. Use `make get URL=…`.
+- **Any change under `src/adapters/rpc/` moves `gw44-sw.js` and both pages**, because `src/adapters/sw/sw.ts` and `boot.ts` each import `createFetchRpc` from it; a pin changes all three files too. Whether the deployable moved is read from the hashes `make build` prints, never inferred from which source directories were edited.
 - Four tsconfigs, because a worker, a page and Node have different globals: `tsconfig.json` (core, tools, unit tests), `.sw.json`, `.dom.json`, `.e2e.json`.
 - `/gw44-sw.js` is reserved on every origin. The worker script must sit at the root to hold scope `/`, since a static host cannot send `Service-Worker-Allowed`.
 - The path form (`/<chain>/<contract>/`) is loopback-only by design. Do not relax `isLoopback` to make a public demo work.

@@ -95,6 +95,7 @@ make check          # Typecheck, unit tests, browser tests
 make verify         # Prove the gateway serves what a live chain returns (network)
 make browsers       # Install Playwright's browsers for ENGINES
 make get URL=<url>  # Resolve one gateway URL without a browser
+make build PIN=…    # Build for one contract only (see The pinned build)
 make help           # List every command
 ```
 
@@ -106,7 +107,23 @@ Node 24 and `process-compose` come from `devbox`; run the targets through `devbo
 
 To run them locally, `sudo npx playwright-core install-deps firefox webkit` once. That install is enough **because** `make e2e` sets `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1` (`mk/10-gateway.mk`): Playwright's pre-launch check shells out to `ldd`, and under `devbox run --` that is nix's `ldd`, which cannot see system libraries however they were installed. Without the skip the install would make no difference and the engines would still refuse to start.
 
-**`make verify` is the one target that reaches a live chain**, and it is not part of `make check` and not in CI. It reads the fixture contract on Sepolia and Base Sepolia through the endpoints in [`chains.json`](chains.json), decodes the ABI with `cast` and shell arithmetic rather than with anything under `src/`, and compares both hashes with what `tools/get.ts` serves; it finishes by loading the document in headless Chromium. So it needs the network and those two chains reachable. `VERIFY_CHAINS` and `VERIFY_ADDRESS` override what it checks.
+### The pinned build
+
+```bash
+make build PIN=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
+```
+
+The same three files, built to serve **one** contract at **every** URL on the origin you host them on — so `https://your-domain.example/` is that contract's document and `https://your-domain.example/widget.js` is its `widget.js`. The pin is compiled in, exactly as the endpoints are: there is no URL on a pinned build that reaches a second contract, and the hostname is never read, so neither the `<address>.<chain>.<host>` form nor the `/<chain>/<address>/` form means anything there. A path that looks like the second form is just a path, and is asked of the pinned contract as a resource of that name.
+
+Only the pinned chain's endpoints are compiled in. Point `GW44_CHAINS` at a file of your own to use your own endpoints rather than the public ones in [`chains.json`](chains.json):
+
+```bash
+GW44_CHAINS=my-chains.json make build PIN=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
+```
+
+An owner can put the result on a domain of their own, with no dependence on a public gateway existing. Hosting instructions are not here yet: `docs/DEPLOY.md` arrives with m01-t05.
+
+**`make verify` is the one target that reaches a live chain**, and it is not part of `make check` and not in CI. It reads the fixture contract on Sepolia and Base Sepolia through the endpoints in [`chains.json`](chains.json), decodes the ABI with `cast` and shell arithmetic rather than with anything under `src/`, and compares both hashes with what `tools/get.ts` serves; it finishes by loading the document in headless Chromium. So it needs the network and those two chains reachable. `VERIFY_CHAINS` and `VERIFY_ADDRESS` override what it checks, and `VERIFY_STATUS` the status an ERC-5219 resource must answer. It checks the pinned build too: per chain, the same bytes resolved through a pin from a URL that names no contract, and the pinned document loaded in a browser on its own port.
 
 The RPC endpoints are [`chains.json`](chains.json), compiled into the worker at build time. To serve another chain, add it there and rebuild; `GW44_CHAINS=<file> make build` uses a different file. Chain `31337` points at `http://127.0.0.1:8545`.
 

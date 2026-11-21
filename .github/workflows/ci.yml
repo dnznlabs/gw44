@@ -63,6 +63,12 @@ jobs:
           b="$RUNNER_TEMP/dist-b"
           devbox run -- bash -c "GW44_OUT='$a' node tools/build.ts && GW44_OUT='$b' node tools/build.ts"
           diff -r "$a" "$b"
+          # The pinned build is a second deployable with its own bytes, so it gets its own pair.
+          pin=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
+          pa="$RUNNER_TEMP/pinned-a"
+          pb="$RUNNER_TEMP/pinned-b"
+          devbox run -- bash -c "GW44_PIN='$pin' GW44_OUT='$pa' node tools/build.ts && GW44_PIN='$pin' GW44_OUT='$pb' node tools/build.ts"
+          diff -r "$pa" "$pb"
           deps=$(devbox run -- npm ls --omit=dev --parseable | wc -l)
           if [ "$deps" -ne 1 ]; then
             echo "npm ls --omit=dev printed $deps lines; the deployable must have no runtime dependencies:"

@@ -2,6 +2,11 @@
 GW44_PORT ?= 8244
 export GW44_PORT
 
+# One contract at every URL, compiled in: `make build PIN=<chain>:<address>`. Empty is the ordinary
+# build, which reads the contract from the URL and carries every chain in the chains file.
+PIN ?=
+export GW44_PIN = $(PIN)
+
 TSCONFIGS := tsconfig.json tsconfig.sw.json tsconfig.dom.json tsconfig.e2e.json
 
 # Browser engines the e2e suite runs under, in order. Only chromium is expected to launch on a
@@ -17,7 +22,7 @@ node_modules: package.json package-lock.json
 	npm ci
 	@touch node_modules
 
-build: node_modules ## Build the deployable into dist/ (chains from chains.json, or GW44_CHAINS=<file>)
+build: node_modules ## Build the deployable into dist/ (chains from chains.json or GW44_CHAINS=<file>; PIN=<chain>:<address> for one contract)
 	node tools/build.ts
 
 serve: build ## Serve dist/ on localhost:$(GW44_PORT) under process-compose

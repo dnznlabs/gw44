@@ -9,6 +9,21 @@ declare const self: ServiceWorkerGlobalScope;
 
 const rpc = createFetchRpc(CHAINS);
 
+/**
+ * The gateway's own script path, by the name a contract would be asked for rather than by the bytes
+ * in the URL. `/%67w44-sw.js` is a different `pathname` and the same resource once the path is
+ * decoded, and it is the decoded form that `pinnedTarget` would send to a contract, so matching the
+ * raw string alone left the reservation one percent-escape wide (A12, the 2026-11-21b review).
+ */
+function isWorkerPath(url: URL): boolean {
+  if (url.pathname === SW_PATH) return true;
+  try {
+    return decodeURIComponent(url.pathname) === SW_PATH;
+  } catch {
+    return false; // malformed escapes are not this path; `targetOf` reports them as a bad target
+  }
+}
+
 function toResponse(r: GatewayResponse): Response {
   const nullBody = r.status === 204 || r.status === 205 || r.status === 304;
   return new Response(nullBody ? null : (r.body as Uint8Array<ArrayBuffer>), { status: r.status, headers: r.headers });
@@ -42,7 +57,7 @@ self.addEventListener("fetch", (event) => {
      from the gateway's origin at the gateway's own script URL. The browser fetches the worker's
      script outside this handler, so a worker update is unaffected: what reaches here is a page
      asking for the file. */
-  if (url.pathname === SW_PATH) {
+  if (isWorkerPath(url)) {
     return event.respondWith(
       toResponse(errorResponse(new GatewayError("not-found", `${SW_PATH} is the gateway's own script`))),
     );

@@ -19,6 +19,16 @@
  * would lower-case the bundle's own characters — `</SCRIPT` became `<\/script` — which rewrites a
  * string literal inside the program being inlined. Caught by this module's own test.
  */
+/*
+ * What the escaping does and does not claim (A13, the 2026-11-21b review). A backslash before `/`
+ * and before `!` is not an escape sequence in a string literal, a template literal, a comment or a
+ * regular expression without the `u` or `v` flag, so in every context the bundle contains today the
+ * program is byte for byte the one that was compiled. It is **not** meaning-preserving everywhere:
+ * inside a `u`- or `v`-flagged regular expression `\!` is an invalid identity escape and a
+ * `SyntaxError`, and inside `String.raw` the backslash is part of the value. Neither context holds
+ * one of these sequences in any bundle this repository produces, and `isScriptSafe` is the check
+ * that would be needed to decide the question for an arbitrary one.
+ */
 export function inlineBoot(shell: string, boot: string): string {
   const safe = boot.replace(/<(\/script)/gi, "<\\$1").replaceAll("<!--", "<\\!--");
   // A function replacement: a string one would expand `$&` and friends found in the minified script.

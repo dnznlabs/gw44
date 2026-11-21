@@ -190,7 +190,7 @@ test("a path-form path naming another contract is a resource of the pinned contr
    the contract here answers `gw44-sw.js` with a script, and the test is that the page never gets it
    and the chain is never asked (#62). Read from a controlled document, because that is the only way
    the request reaches the worker's fetch handler at all. */
-test("the worker answers its own path with a 404 and no call", async () => {
+test("the worker answers its own path, in either spelling, with a 404 and no call", async () => {
   const context = await fresh();
   const page = await context.newPage();
   await page.goto(`http://localhost:${port}/`);
@@ -198,15 +198,23 @@ test("the worker answers its own path with a 404 and no call", async () => {
   await page.waitForFunction(() => document.documentElement.dataset["widget"] === "ran");
 
   const at = seen.length;
-  const got = await page.evaluate(async () => {
-    const res = await fetch("/gw44-sw.js");
-    return { status: res.status, type: res.headers.get("content-type"), body: await res.text() };
-  });
+  /* Both spellings: `/%67w44-sw.js` is a different `pathname` and the same resource once the path is
+     decoded, which is the form a contract would be asked for (A12, the 2026-11-21b review). */
+  const got = await page.evaluate(async () =>
+    Promise.all(
+      ["/gw44-sw.js", "/%67w44-sw.js"].map(async (path) => {
+        const res = await fetch(path);
+        return { path, status: res.status, type: res.headers.get("content-type"), body: await res.text() };
+      }),
+    ),
+  );
   const wanted = encodeRequest(["gw44-sw.js"], []);
 
-  assert.equal(got.status, 404);
-  assert.match(got.type ?? "", /^text\/plain/);
-  assert.match(got.body, /^gw44: \/gw44-sw\.js is the gateway's own script/);
+  for (const one of got) {
+    assert.equal(one.status, 404, one.path);
+    assert.match(one.type ?? "", /^text\/plain/, one.path);
+    assert.match(one.body, /^gw44: \/gw44-sw\.js is the gateway's own script/, one.path);
+  }
   assert.deepEqual(
     seen.slice(at).filter((c) => c.data === wanted),
     [],

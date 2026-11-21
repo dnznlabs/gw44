@@ -56,8 +56,11 @@ test("<!-- is escaped, so the rest of the bundle is not commented out", () => {
   assert.ok(body.includes("console.log(s)"), "the code after it is still there");
 });
 
-test("the escapes leave the bundle running: a backslash before / and ! is not a JavaScript escape", () => {
-  // What the browser evaluates is the escaped text, so it has to still be the same program.
+test("the escapes leave the bundle running in the contexts a bundle contains", () => {
+  // What the browser evaluates is the escaped text, so it has to still be the same program. A
+  // backslash before `/` or `!` is not an escape sequence in a string, a template, a comment or an
+  // un-flagged regular expression; in a `u`-flagged one `\!` is a SyntaxError, which is A13 of the
+  // 2026-11-21b review and is stated at `tools/inline.ts` rather than fixed.
   const boot = 'globalThis.out = ["</SCRIPT", "<!--"].join("|");';
 
   const body = scriptBody(inlineBoot(SHELL, boot));

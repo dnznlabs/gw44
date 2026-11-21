@@ -16,7 +16,7 @@ Eight findings the two reviews left open are closed, each with a test that fails
 | A one-contract configuration and the equivalent `PIN` still produce byte-identical output | pass | `diff -r` of the two output directories is empty; all three files hash equal, `gw44-sw.js` at `ec189a4e…`. A configuration that sets `"frame": "any"` is a different build and hashes differently (`8f572ef2…`), which is the point of the key |
 | `devbox run -- make check` exits 0, three engines | pass | `devbox run -- make check` exits 0: 118 unit tests, 0 fail, and 28 e2e in chromium, 27 pass 1 skip. The other two engines were run **one at a time** as `make e2e ENGINES=<engine>`, both exit 0 — firefox and webkit 28 tests, 26 pass, 2 skips — because all three engines in one `make check` exceeded this machine's memory bound (6,065 MiB observed against a 6,016 MiB limit) and was killed. CI runs the three in one job on its own runner. Every skip is pre-existing and named: the CDP-only forced reload (firefox and webkit), and the fallback-inside-a-frame case that no engine can reach |
 | `make verify` passes | pass | `devbox run -- make verify` exits 0: `verify: every comparison and every browser load passed`, including both pinned passes and both configured passes against the live Sepolia and Base Sepolia contracts |
-| CI green in three engines | — | awaiting the push; recorded on the PR |
+| CI green in three engines | pass | run `44941143516` at `f5cdf71`, job `check` success: 118 unit tests 0 fail, and 28 e2e in each of chromium (27 pass, 1 skip), firefox and webkit (26 pass, 2 skips) |
 | Worker sizes: stop at +400 bytes or 12,000 | pass, +214 to +223 | § Sizes |
 
 ## The eight, one row each

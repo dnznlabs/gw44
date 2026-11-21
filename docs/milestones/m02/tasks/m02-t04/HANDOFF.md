@@ -77,6 +77,8 @@ The stop condition was +400 on any worker or 12,000 absolute; the largest growth
 
 **One finding is a stop-and-report candidate and is the architect's call: A7.** The rule for this run is that a finding breaking contract isolation, script containment, the size cap or the timeout stops the task and is reported. A7 says a 16 MiB reply that is mostly nesting costs the worker far more than its wire bytes, which is the size cap's business, and the leg graded it Low with its figures unmeasured. **So I measured it before filing** (#93): 15.3 MiB of wire text, inside the cap, allocates **443 MiB of heap and 616 MiB of RSS in 658 ms**, about 29× the bytes, from one call. That is the same magnitude as F3 — 509 MB from 4.2 MB — which was graded Medium and fixed under review scope in m01-t07. The fix belongs in `src/adapters/rpc/fetch.ts`, which this task does not touch and whose concurrency half is already #69, so **the eight fixes are not held for it**; what is asked is whether A7 is read as a stop-and-report against this task or as M04's with #69 and #18.
 
+The run's transcripts are committed as the previous two runs' are, with this machine's paths and session identifiers in them: that is #66's subject, which is M05's and conditional on the repository going public, so a third set follows the recorded disposition rather than changing it.
+
 Everything else got a row in `SECURITY.md` § Third run, 2026-11-21b and a carried issue: #93 (A7), #94 (A4), #95 (A5), #96 (A6), #97 (A10), #98 (A11), #99 (A13), #100 (A14), #101 (A15–A18). A3, A8 and A9 went to the issues that already hold them — #18, #61 and #60 — and A1 and A2 are stated limits.
 
 ## Decisions

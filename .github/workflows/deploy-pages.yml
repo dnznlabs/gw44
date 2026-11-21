@@ -214,43 +214,78 @@ jobs:
         run: |
           echo "verify-only: built and checked, deployed nothing"
 
-      - uses: actions/upload-pages-artifact@v5
+      - id: upload
+        uses: actions/upload-pages-artifact@v5
         if: ${{ !inputs.verify-only }}
         with:
           path: ${{ runner.temp }}/site
 
       # `actions/deploy-pages` looks the artifact up by name in this run, and that lookup returned
       # `Found 0 artifact(s)` a few hundred milliseconds after a successful finalize in **three of
-      # the four** runs that reached it on 2026-11-21 (actions/deploy-pages#451, where the same
-      # signature is reported as intermittent for the upload-and-deploy-in-one-job layout the Pages
-      # static starter uses). Measured on each failed run afterwards through the REST API: the
-      # artifact is there. So the deploy waits for the artifact to be listable instead of racing it.
+      # the four** runs that reached it on 2026-11-21 (actions/deploy-pages#451 reports the same
+      # signature as intermittent for the upload-and-deploy-in-one-job layout the Pages static
+      # starter uses).
       #
-      # Not a re-run: a re-run of the same run uploads a second `github-pages` artifact and the
-      # lookup then fails the other way, `Multiple artifacts ... Artifact count is 2`. The count is
-      # checked here for the same reason, so that case is named rather than met later.
+      # What was measured afterwards, by run and by artifact id, with nothing deleted by hand:
+      #
+      #   run 44944097999  failed, id 14721864845  listable at 20:08Z, expires the next day
+      #   run 44943264179  failed, id 14721818780  listable between 19:54Z and 19:57Z; 404 by id
+      #                                            and absent by run at 20:00Z and at 20:08Z
+      #   run 44943072153  failed, id 14722087865  never observed listable; 404 by id at 20:08Z
+      #   run 44943691478  deployed                listable, and deployed from
+      #
+      # So there are **two** failures behind one error message, and the wait below only cures the
+      # first. On one run the artifact arrived after the lookup, which is the race. On another it was
+      # listable minutes after the run and had gone a few minutes later, and on a third it was never
+      # seen at all — an upload that reports success and a finalized id that does not answer. The
+      # timeout is therefore a real outcome and not just a slow path, which is why it prints what it
+      # last saw rather than only that it gave up.
       - name: Wait until the artifact is listable
         if: ${{ !inputs.verify-only }}
         env:
           GH_TOKEN: ${{ github.token }}
           # The caller's run id, which is the run the artifact belongs to.
           RUN_ID: ${{ github.run_id }}
+          # `upload-pages-artifact` exposes the id as a step output; checked against v5's action.yml,
+          # where `artifact_id` is `steps.upload-artifact.outputs.artifact-id`.
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          # Deliberately not `set -e`: a transient failure of the call is "not listable yet" for the
+          # length of the loop, because the loop exists to wait out exactly that kind of flakiness.
+          # `gh --jq` rather than a pipe to `jq`, so the step has one dependency and the same
+          # expression can be exercised locally against a stub `gh`.
+          runs=repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts
+          mine='[.artifacts[] | select(.name == "github-pages")] | length'
           for i in $(seq 1 20); do
-            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
-              --jq '[.artifacts[] | select(.name == "github-pages")] | length')
-            if [ "$count" -eq 1 ]; then
-              echo "the github-pages artifact is listable after about $(( (i - 1) * 3 ))s"
-              exit 0
+            if ! count=$(gh api "$runs" --jq "$mine" 2>&1); then
+              echo "  attempt $i: the artifacts call failed, treating it as not yet listable"
+              count=0
             fi
-            if [ "$count" -gt 1 ]; then
-              echo "there are $count github-pages artifacts in this run; deploy-pages needs exactly one" >&2
-              exit 1
-            fi
+            case "$count" in
+              1) echo "the github-pages artifact is listable after about $(( (i - 1) * 3 ))s"; exit 0 ;;
+              0) : ;;
+              *) echo "this run has $count github-pages artifacts and deploy-pages needs exactly one" >&2
+                 echo "a re-run of a failed run is what produces that; dispatch a new run instead" >&2
+                 exit 1 ;;
+            esac
             sleep 3
           done
-          echo "the github-pages artifact never became listable; deploy-pages would report Found 0" >&2
+          # Three readings the next failure should not need a log reader to establish: what the API
+          # says now, how many artifacts of any name the run has, and whether the id the upload step
+          # reported answers. The third is what separates a lookup that is early from an upload that
+          # finalized and left nothing.
+          echo "the github-pages artifact never became listable in 60s; deploy-pages would report Found 0" >&2
+          echo "--- $runs, as it answers now" >&2
+          gh api "$runs" >&2 || echo "the call failed" >&2
+          echo "--- artifacts of any name in this run" >&2
+          gh api "$runs" --jq '.total_count' >&2 || echo "the call failed" >&2
+          echo "--- the id the upload step reported, ${ARTIFACT_ID:-unset}, read by id" >&2
+          if [ -n "${ARTIFACT_ID:-}" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" \
+              --jq '"\(.name) \(.size_in_bytes)B expired=\(.expired) expires=\(.expires_at)"' >&2 \
+              || echo "the finalized id does not answer, so the upload reported success and left nothing" >&2
+          fi
           exit 1
 
       - id: deployment

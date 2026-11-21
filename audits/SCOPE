@@ -1,0 +1,49 @@
+# The files this project's audit reads, one repo-relative path per line.
+# `#` comments and blank lines are ignored by scripts/audit.sh; the legs receive the paths alone.
+#
+# Everything a visitor's browser runs, plus the program that builds it. The method and the reasoning
+# behind named-file scope are in README.md.
+
+src/core/abi.ts
+src/core/errors.ts
+src/core/ports.ts
+src/core/resolve.ts
+src/core/target.ts
+src/adapters/rpc/fetch.ts
+src/adapters/rpc/memory.ts
+src/adapters/sw/boot.ts
+src/adapters/sw/config.ts
+src/adapters/sw/shell.html
+src/adapters/sw/sw.ts
+tools/build.ts
+
+# ---- excluded, each with its reason -------------------------------------------------------------
+#
+# test/
+#     Not shipped. The tests are the other half of the method rather than a subject of it: where a
+#     property can be asserted a test beats a finding, and a test that was wrong would show up as a
+#     finding against the code it guards.
+#
+# tools/get.ts, tools/serve.ts, tools/verify.sh, tools/verify-browser.ts
+#     Never reach a visitor. `get.ts` and `verify.sh` are the gateway's own instruments, `serve.ts`
+#     is the local static host, and none of the four is in the deployable: the build writes three
+#     files and `tools/build.ts` fails on a fourth. A bug in them costs a wrong measurement, which
+#     is a real cost, and not an attack on anybody's browser.
+#
+# chains.json
+#     Data a deployer replaces. Which endpoints are believed is a deployment decision; what the code
+#     does with a hostile or lying endpoint is in scope, and `src/adapters/rpc/fetch.ts` is where it
+#     is decided.
+#
+# devbox.json, devbox.lock, package.json, package-lock.json, mk/, .github/
+#     The toolchain and the gate, not the deployable. `tools/build.ts` is in scope because it is the
+#     program that composes what ships, including the values it substitutes; the build's own
+#     dependencies are outside the review and README.md § What the review did not cover says so.
+#
+# ---- one file in scope that does not ship -------------------------------------------------------
+#
+# src/adapters/rpc/memory.ts is in this list because the scope rule is every file under
+# `src/adapters/rpc/`, and it is kept rather than argued away. Measured at the review commit: only
+# `test/resolve.test.ts` imports it, and `grep -c memory` on the built `gw44-sw.js` is 0, so it is
+# not in the deployable. It defines the `Rpc` contract every other adapter meets, which is worth a
+# read even though a finding in it cannot reach a visitor by itself.

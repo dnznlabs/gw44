@@ -35,6 +35,15 @@ The first is filed. The others become issues assigned to the Product Owner when 
 - **Action: criterion 7**, on a phone.
 - **Focus.** Criterion 8 is work in rake's repository. It starts when rake's mainnet addresses exist and the focus allows work there.
 
+## Where it stands
+
+Updated 2026-11-21. Criteria 1 to 7 are met on the test site, `https://gw-test.dnzn.dev`. Open before the milestone can close:
+
+- **Criterion 8, `rake.dnzn.dev`**, which is rake's m05-t04 and waits on rake's mainnet addresses.
+- **Decision [#114](https://github.com/dnznlabs/gw44/issues/114)**: a redeploy does not reach a returning visitor by navigation alone (measured, [#85](https://github.com/dnznlabs/gw44/issues/85)); whether the worker asks for the update check itself, and when.
+- **The deploy step fails more often than it should**: three of eight runs through the reusable workflow deployed, for a reason inside GitHub's deploy action that an in-job retry now covers ([#111](https://github.com/dnznlabs/gw44/pull/111)). The two runs since both deployed on the first attempt; two is not a rate.
+- **Carried issues labelled `m02`** that are not yet placed: [#77](https://github.com/dnznlabs/gw44/issues/77), [#107](https://github.com/dnznlabs/gw44/issues/107), [#109](https://github.com/dnznlabs/gw44/issues/109), [#110](https://github.com/dnznlabs/gw44/issues/110). Each is fixed, moved or dropped with a reason at the close-out.
+
 ## Phases
 
 ### Phase 1 — A real host
@@ -49,9 +58,9 @@ The build on GitHub Pages under a real hostname, checked in three engines. Finis
 
 | Task | Goal | Status |
 |:-----|:-----|:-------|
-| [m02-t02](tasks/m02-t02/TASK.md) | The reusable workflow, the static copies and their hash check; the test site redeployed through it (criteria 3, 4) | not started |
-| [m02-t04](tasks/m02-t04/TASK.md) | The carried changes to reviewed files, made together, and one review run over them: #57, #58, #59, #62, #63, #73, #74, #82 | not started |
-| [m02-t03](tasks/m02-t03/TASK.md) | `docs/DEPLOY.md`, followed by a second reader; the phone check (criteria 6, 7) | not started |
+| [m02-t02](tasks/m02-t02/TASK.md) | The reusable workflow, the static copies and their hash check; the test site redeployed through it (criteria 3, 4) | done ([#89](https://github.com/dnznlabs/gw44/pull/89), [#103](https://github.com/dnznlabs/gw44/pull/103), [#105](https://github.com/dnznlabs/gw44/pull/105), [#111](https://github.com/dnznlabs/gw44/pull/111), [#113](https://github.com/dnznlabs/gw44/pull/113)) |
+| [m02-t04](tasks/m02-t04/TASK.md) | The carried changes to reviewed files, made together, and one review run over them: #57, #58, #59, #62, #63, #73, #74, #82 | done ([#102](https://github.com/dnznlabs/gw44/pull/102)) |
+| [m02-t03](tasks/m02-t03/TASK.md) | `docs/DEPLOY.md`, followed by a second reader; the phone check (criteria 6, 7) | done ([#112](https://github.com/dnznlabs/gw44/pull/112)); phone check on [#106](https://github.com/dnznlabs/gw44/issues/106) |
 
 ### Phase 3 — The first project
 

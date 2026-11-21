@@ -331,19 +331,21 @@ Deploy again and the three files are replaced. What a **returning** visitor sees
 
 Pages' own `etag` is derived from modification time and size rather than from content, and a deploy resets the edge's `age`, so a deploy invalidates the CDN even when the bytes are unchanged.
 
-**How soon a returning visitor sees it, measured.** A persistent browser profile that had the site installed, across a redeploy that changed the default chain, in Chromium on 2026-11-21:
+**How soon a returning visitor sees it.** A plain navigation starts the browser's update check, and the navigation after that is on the new build. Measured in all three engines, two builds differing only in the default chain, one persistent profile, the browser **left open** between navigations:
 
-| | |
+| Engine | New default first seen |
 |:--|:--|
-| The host served the new bytes | from **56 seconds** after the deploy finished, and at every later reading |
-| Plain navigations to `/` | **eleven over ten and a half minutes, every one on the old default.** The registration stayed `activated` with nothing installing or waiting |
-| A clean window in the other direction, no intervention | **fourteen navigations across sixteen minutes**, every one on the old default — the last at 986 s, past any cache lifetime here |
-| `registration.update()`, called once from the page | returned in **3.1 s** both times it was tried, and the new worker installed and claimed its clients at once |
-| The navigation after that | the **new** default, about a second later, and every navigation after |
+| Chromium | the **second** navigation after the deploy, +5.7 s |
+| Firefox | the second navigation, +5.6 s |
+| WebKit | the second navigation, +5.6 s |
 
-Both directions of the change were measured — to the other chain and back — and behaved identically. So the two halves of the mechanism behave very differently. The gateway's own side is immediate: `skipWaiting()` and `clients.claim()` move a returning visitor to the new build about a second after an update check happens. **What does not happen on its own is the check.** Navigating, even repeatedly, did not trigger one in the window measured.
+The check runs in the background **after** a page has loaded, which is why it is the next navigation and not the one that triggered it: `skipWaiting()` and `clients.claim()` then put the new worker in charge at once. A visitor who never navigates again is checked within the specification's 24 hours, which is an upper bound this project has not measured.
 
-**What to do about it, if propagation matters to you.** Have your document ask for it — `navigator.serviceWorker.getRegistration('/').then(r => r && r.update())` on load — and a returning visitor's next navigation is current. The gateway does not do this for you today ([#85](https://github.com/dnznlabs/gw44/issues/85) carries the measurement and the question of whether it should). Until then, treat "deployed" as "served to new visitors, and to returning ones when something asks".
+**One pattern where it does not complete, and it is a common one.** A browser opened around a single visit and closed again never finishes the check: thirteen such sessions across sixteen minutes, each `open → load → load → close`, all on the old build, through GitHub Pages. That is close to what a phone does when someone opens a link, reads, and swipes the app away — such a visitor can keep the old build across many visits. The same profile, left open, updates on the next navigation.
+
+So **you do not need a line in your document.** An earlier version of this section said you did, on a measurement whose browser was closed after every load; the readings and the correction are on [#85](https://github.com/dnznlabs/gw44/issues/85) and [#114](https://github.com/dnznlabs/gw44/issues/114). If you want a returning visitor current *within* one visit rather than on their next navigation, `navigator.serviceWorker.getRegistration('/').then(r => r && r.update())` from your document does that — measured at **3.1 s** from the call to the new worker being in charge — but it is an optimisation, not a fix for something broken.
+
+**Not confirmed on GitHub Pages yet.** The engine figures above were taken against `tools/serve.ts`, which sends `cache-control: no-cache` on the worker script where Pages sends `max-age=600`. `updateViaCache: "none"` is meant to make that irrelevant, and the thirteen-session reading above does not separate the two causes because every one of those sessions also closed the browser. It is confirmed at no extra cost on the next deploy that changes the worker, with the browser left open.
 
 ## 9 — One contract on one chain
 

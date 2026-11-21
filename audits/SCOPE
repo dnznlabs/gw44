@@ -13,6 +13,7 @@ src/adapters/rpc/fetch.ts
 src/adapters/rpc/memory.ts
 src/adapters/sw/boot.ts
 src/adapters/sw/config.ts
+src/adapters/sw/fallback.ts
 src/adapters/sw/shell.html
 src/adapters/sw/sw.ts
 tools/build.ts

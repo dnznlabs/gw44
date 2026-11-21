@@ -34,6 +34,8 @@ sequenceDiagram
     Note over B,R: Dapp loaded. Its own chain traffic does not pass through the gateway.
 ```
 
+**Where a browser has no service workers**, the boot page fetches the contract's root document and writes it into itself, so a first visit still shows the dapp at the same URL. That path can only serve the root, and it declines rather than mislead: a page whose real headers are the static host's cannot honour a `content-security-policy`, `x-frame-options` or similar that the contract set, so a contract that sets one gets a short message there instead of its document, and the worker's path instead.
+
 ## Motivation
 
 Gateways are where decentralization breaks down for on-chain dapps. The whole point of ERC-8244 is that the code lives on-chain, with no backend. But a browser cannot read a chain, so the page arrives through a gateway, and a hosted gateway is a backend again: a server between the user and the contract that has to be trusted.

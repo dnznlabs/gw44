@@ -254,6 +254,36 @@ test("without service workers the root document is still rendered, at the same U
   await context.close();
 });
 
+/* F2 of the 2026-11-20 review. The fallback writes a contract's bytes into a document whose real
+   headers are the static host's, so it now declines anything it cannot honour. The header condition
+   cannot be reached from a browser today and is unit-tested instead (test/fallback.test.ts): the
+   fallback renders only a contract's root, and the core builds a root response from `html()` with
+   fixed headers only, so no contract header can get there until #57. */
+test("without service workers a non-root path is declined, not rendered", async () => {
+  const context = await fresh({ serviceWorkers: "block" });
+  const page = await context.newPage();
+
+  await page.goto(`${path()}widget.js`);
+  await page.waitForFunction(
+    () => (document.getElementById("gw44")?.textContent ?? "").includes("needs a service worker"),
+  );
+
+  assert.equal(await page.locator("#v").count(), 0);
+  await context.close();
+});
+
+/* Measured before the fix, on 2026-11-21, in all three engines: the shell loads inside a
+   cross-origin frame (the gateway answers `/` with 200 and `#gw44` attaches) and the fallback never
+   renders the document there, while the same context at the top level does render it. So leg 2's
+   route for forcing the fallback from a third party does not work in any engine this suite runs,
+   and there is nothing for a browser test to assert. Kept as a named skip so the measurement is
+   visible in the run output rather than only in a handoff. */
+test("without service workers the fallback is declined inside a frame", {
+  skip: "measured 2026-11-21: no engine reaches the fallback in a cross-origin frame, so the case cannot be set up",
+}, () => {
+  assert.fail("unreachable");
+});
+
 // The limit of a gateway with no backend, pinned so it is never rediscovered: a service worker
 // answers its own pages only. Another site's <script src> reaches the static host, and gets the shell.
 test("LIMIT: a cross-origin <script src> is not served by the worker", async () => {

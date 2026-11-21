@@ -17,6 +17,7 @@ src/adapters/sw/fallback.ts
 src/adapters/sw/shell.html
 src/adapters/sw/sw.ts
 tools/build.ts
+tools/inline.ts
 
 # ---- excluded, each with its reason -------------------------------------------------------------
 #
@@ -26,6 +27,8 @@ tools/build.ts
 #     finding against the code it guards.
 #
 # tools/get.ts, tools/serve.ts, tools/verify.sh, tools/verify-browser.ts
+#     (`tools/inline.ts` is in scope, not here: it decides what the shipped page's script element
+#     contains, which is the build's one injection site.)
 #     Never reach a visitor. `get.ts` and `verify.sh` are the gateway's own instruments, `serve.ts`
 #     is the local static host, and none of the four is in the deployable: the build writes three
 #     files and `tools/build.ts` fails on a fourth. A bug in them costs a wrong measurement, which

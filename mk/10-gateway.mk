@@ -7,8 +7,14 @@ export GW44_PORT
 PIN ?=
 # A project's contracts, one per chain: `make build CONFIG=gw44.json`. Mutually exclusive with PIN.
 CONFIG ?=
-export GW44_CONFIG = $(CONFIG)
+# Exported only when given a value: to the build, set-but-empty is a mistake rather than a default
+# (#73), and an unconditional `export` would hand it one on every unpinned build.
+ifneq ($(strip $(PIN)),)
 export GW44_PIN = $(PIN)
+endif
+ifneq ($(strip $(CONFIG)),)
+export GW44_CONFIG = $(CONFIG)
+endif
 
 TSCONFIGS := tsconfig.json tsconfig.sw.json tsconfig.dom.json tsconfig.e2e.json
 

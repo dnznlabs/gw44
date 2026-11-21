@@ -1,62 +1,33 @@
-# Deploys the test site: a two-chain build of the rake fixture to GitHub Pages at gw-test.dnzn.dev.
+# Deploys the test site at gw-test.dnzn.dev by calling the reusable workflow, exactly as a project
+# in another repository would. It is this repository's own first caller, so the path a project takes
+# is the path that is exercised here.
 #
 # Run by hand, from `main`, and only there. Not on push, not on a schedule, not from a branch
 # (m02-t01 § Out of scope): a deploy is a decision, and the site it replaces is what the next
-# milestone's checks are measured against. `workflow_dispatch` on a non-default branch is not
-# offered by GitHub anyway, so the `main` guard below is belt as well as braces.
+# milestone's checks are measured against.
 #
-# There is no `CNAME` file. With GitHub Actions as the Pages source the custom domain is the
-# repository's setting, and a committed `CNAME` would be a second place to get it wrong.
+# `gw44-read-key` is passed although this repository's own token could read it: the secret is the
+# path a caller elsewhere depends on, and a path nobody exercises is a path nobody knows works.
 name: pages-test
 
 on:
   workflow_dispatch:
 
-# `contents: read` to check out, and the two Pages tokens. Nothing here writes to the repository.
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# One deploy at a time, and never cancelled: a half-finished deploy would leave the site serving a
-# mixture of two builds, which is worse than waiting.
-concurrency:
-  group: pages-test
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    environment: github-pages
-    steps:
-      - name: Refuse anything but main
-        if: github.ref != 'refs/heads/main'
-        run: |
-          echo "pages-test deploys from main only; got ${{ github.ref }}" >&2
-          exit 1
-
-      - uses: actions/checkout@v7
-
-      # Pinned as `ci.yml` pins it, and for the same reason: the committed devbox.lock was written
-      # by 0.22.0, and an older devbox rewrites it.
-      - uses: jetify-com/devbox-install-action@v0.15.0
-        with:
-          devbox-version: 0.22.0
-          enable-cache: true
-
-      - name: Install dependencies
-        run: devbox run -- npm ci
-
-      # The three hashes stay in the log on purpose: they are what a reader compares a local build
-      # of the same commit against, and the only evidence that the site serves the reviewed bytes.
-      - name: Build the two-chain test site
-        run: devbox run -- env GW44_CONFIG=test/fixtures/gw44.two-chains.json node tools/build.ts
-
-      - uses: actions/configure-pages@v6
-
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist/
-
-      - id: deployment
-        uses: actions/deploy-pages@v5
+    # A local path, so the workflow and the source are the same commit by construction. A caller in
+    # another repository writes `dnznlabs/gw44/.github/workflows/deploy-pages.yml@<sha>` instead and
+    # repeats that sha in `gw44-ref`.
+    uses: ./.github/workflows/deploy-pages.yml
+    with:
+      gw44-ref: ${{ github.sha }}
+      config: test/fixtures/gw44.two-chains.json
+      chains: chains.json
+      embeds: widget.js
+    secrets:
+      gw44-read-key: ${{ secrets.GW44_READ_KEY }}

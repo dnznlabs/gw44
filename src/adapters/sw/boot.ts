@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+import { GatewayError } from "../../core/errors.ts";
 import { resolve } from "../../core/resolve.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
 import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
@@ -70,8 +71,12 @@ async function boot(): Promise<void> {
        itself, but a script navigation does not, so without this a first visit to `/#/docs` landed
        on `/<default>/` while every later visit landed on `/<default>/#/docs`. */
     if (target.redirect !== undefined) return void location.replace(target.redirect + location.hash);
-  } catch {
-    return say("gw44: malformed URL");
+  } catch (error) {
+    /* A configured build throws rather than returning null for a first segment it has no contract
+       for, and that is the ordinary case of a visitor mistyping a chain — not a malformed URL. The
+       worker serves `gw44: no contract at this path` there, so the page without a worker says the
+       same sentence (#82). Anything that is not the gateway's own error keeps the old one. */
+    return say(error instanceof GatewayError ? `gw44: ${error.message}` : "gw44: malformed URL");
   }
   if (!("serviceWorker" in navigator) || attempt() >= MAX_ATTEMPTS) return renderInline(url);
   try {

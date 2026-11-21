@@ -192,6 +192,21 @@ test("a first segment that is not a configured chain is 404 and costs no call", 
   await context.close();
 });
 
+/* The sentence the page shows for an unconfigured first segment, with no worker involved: this is
+   the shell's own report, and before #82 it was `gw44: malformed URL` — the one message the page
+   has for a URL it cannot parse at all, shown for the ordinary case of a mistyped chain. The worker
+   serves `gw44: no contract at this path` for the same URL, so the two now agree. */
+test("a cold visit to an unconfigured chain says no contract at this path", async () => {
+  const context = await fresh({ serviceWorkers: "block" });
+  const page = await context.newPage();
+
+  await page.goto(at("/nope/"));
+  await page.waitForFunction(() => (document.getElementById("gw44")?.textContent ?? "").startsWith("gw44:"));
+
+  assert.equal(await page.textContent("#gw44"), "gw44: no contract at this path");
+  await context.close();
+});
+
 /* Decision 9's reason for the prefix: an absolute URL in a document must fail rather than quietly
    read the default chain's contract, which is what a single shared origin would have done. */
 test("an absolute URL from a document under one prefix reaches no contract", async () => {

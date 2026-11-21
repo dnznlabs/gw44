@@ -84,7 +84,7 @@ Validated by the build, which refuses anything else:
 - values are **non-empty arrays** of URLs — a bare string where a list belongs is refused, and so is `null`;
 - `https:` only, except `http:` for a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`) so that a development build can point at an anvil.
 
-An empty object is accepted and serves nothing. Every chain named in `gw44.json` must appear here, or the build fails naming the chain.
+Every chain named in `gw44.json` must appear here, or the build fails naming the chain — and a chain you name in neither is simply absent from the deployable.
 
 Two things the validator cannot decide for you: an endpoint with an API key in its URL is **published** in all three files if its chain is configured, and a credentialed `https://user:pass@…` endpoint cannot work at all, because `fetch` rejects it ([#94](https://github.com/dnznlabs/gw44/issues/94)).
 
@@ -97,7 +97,20 @@ git clone https://github.com/dnznlabs/gw44 && cd gw44
 devbox run -- make build CONFIG=/path/to/your/gw44.json GW44_CHAINS=/path/to/your/chains.json
 ```
 
+While `dnznlabs/gw44` is private the clone needs access of its own — a `gh auth login` on that machine, or the deploy key of § 5. `GW44_CHAINS` defaults to the checkout's own `./chains.json`, which is this project's endpoints and not yours, so pass your file.
+
 It prints one line per file — a sha256, a size and a name — and those three lines are exactly what `expect` takes in § 5. A mistake in either file fails here, in seconds, with the message § 10 lists, rather than in a deploy run. `GW44_OUT=<dir>` puts the output somewhere other than `dist/`, and `PIN=<chain>:<address>` builds for one contract with no configuration file at all (§ 9).
+
+**And point it at your contract before you deploy anything**, because a configuration naming a contract that is not there builds perfectly well and fails only once a visitor arrives:
+
+```bash
+devbox run -- make get URL="https://anything.invalid/<chain>/" CONFIG=/path/to/your/gw44.json
+# 200 64305 B 298 ms
+# content-type: text/html; charset=utf-8
+# content-security-policy: frame-ancestors 'self'
+```
+
+The hostname is ignored under a configuration, so any URL will do; what you are reading is the status and the size. A contract that does not serve that path answers `404 47 B` with `text/plain`, and **the command still exits 0**, so read the status line rather than the exit code.
 
 Everything in §§ 7 and 9 that starts with `make` is run from that checkout too.
 
@@ -239,15 +252,17 @@ The host page then trusts the **bytes**, not your site: if the file differs from
 To check a published copy against a hash you were given, without a deploy log:
 
 ```bash
-curl -sS https://your-host/1/widget.js | openssl dgst -sha384 -binary | openssl base64 -A
+curl -fsS https://your-host/1/widget.js | openssl dgst -sha384 -binary | openssl base64 -A
 # the base64 after `sha384-` in the snippet
 ```
+
+**`-f` is load-bearing.** Without it, a wrong path hashes the host's 404 page — which on this host is the shell, so you get a confident `sha384-…` of the wrong bytes. With it, `curl` exits non-zero and prints nothing.
 
 **So a contract whose script changes needs a redeploy and a new snippet.** The copies are taken at deploy time and do not follow the chain: publish the new bytes, take the new `integrity`, and update every host page that embeds it. Until they are updated those pages run nothing, which is loud rather than silent.
 
 ## 7 — Checking a deployment
 
-Both targets are run from a **checkout of `dnznlabs/gw44`** (§ 3), against the site you deployed. The browser engines are a download of their own, once per checkout:
+Both targets are run from a **checkout of `dnznlabs/gw44`** (§ 3), against the site you deployed. Check it out at the **same commit you deployed** — the one in `gw44-ref` — so that what checks the site is what built it; `git clone` gives you the default branch, which may have moved since. The browser engines are a download of their own, once per checkout:
 
 ```bash
 devbox run -- make browsers ENGINES="chromium firefox webkit"
@@ -258,7 +273,7 @@ devbox run -- make check-site URL=https://your-host SITE_CONFIG=/path/to/your/gw
   EMBED="1/widget.js=sha384-…"            # the pair the deploy printed
 ```
 
-`SITE_CONFIG` is **your** configuration file, the one the site was built from: the default chain and the chain list are what most of the cases assert, so a check run against the wrong file fails for the wrong reason. The quoted readings in this guide come from the test site, which is built from [`test/fixtures/gw44.two-chains.json`](../test/fixtures/gw44.two-chains.json).
+`SITE_CONFIG` is **your** configuration file, the one the site was built from: the default chain and the chain list are what most of the cases assert, so a check run against the wrong file fails for the wrong reason. The quoted readings in this guide come from the test site, which is built from [`test/fixtures/gw44.two-chains.json`](../test/fixtures/gw44.two-chains.json): chains `11155111` and `84532`, both serving `0x00a9f390a6010d045e0d34856048ddd6910d25ba`, default `11155111`. Those are the values to pass if you want to reproduce this guide's readings against that site rather than your own.
 
 Nine cases per engine, each in a fresh browser context, over real HTTPS. **`ENGINES` defaults to `chromium` alone**, so the bare command is one engine; pass `ENGINES="chromium firefox webkit"` for three, or one at a time if a machine is tight on memory. What the lines mean:
 
@@ -335,7 +350,7 @@ Failures this project has actually met, with the message each one gives.
 | `the build does not match expect; nothing is deployed` | the bytes differ from the `expect` you passed. Compare the printed lines with yours before assuming the build is wrong: a changed `gw44-ref` changes them legitimately. |
 | `gw44-sw.js would be … over the 16384 B limit; nothing was written` | the worker is over its size cap, usually because the chains file compiled in is very large. Nothing was written. |
 | `<dir>/ holds …; the deployable is only 404.html, gw44-sw.js, index.html; run 'make clean'` | something else is in the output directory. The build refuses it rather than deploying a mixture, and writes nothing. |
-| `Found 0 artifact(s)`, right after `Artifact github-pages has been successfully uploaded!` | `actions/deploy-pages` looking the artifact up before it is listable ([upstream #451](https://github.com/actions/deploy-pages/issues/451)). **Do not re-run the failed run**: a re-run uploads a second artifact to the same run and the lookup then fails with `Multiple artifacts … Artifact count is 2`. Dispatch a new run. [#105](https://github.com/dnznlabs/gw44/pull/105) makes the deploy wait for the artifact instead of racing it. |
+| `Found 0 artifact(s)`, right after `Artifact github-pages has been successfully uploaded!` | `actions/deploy-pages` finding no artifact that the REST API lists in the same job. Measured on 2026-11-21: the workflow's own wait found the artifact **on its first try**, and the action reported `Found 0` half a second later, about an artifact still listable a minute afterwards — so it is not a matter of waiting. The action does not use the REST endpoint; it calls the toolkit's internal `ListArtifacts` with the ids carried by the runtime token, which is a different view. [#111](https://github.com/dnznlabs/gw44/pull/111) makes the deploy step try three times in one job and name the attempt that worked, which is what will say whether that view is late or absent. **Do not re-run the failed run**: a re-run uploads a second artifact to the same run and the lookup then fails the other way, `Multiple artifacts … Artifact count is 2`. Dispatch a new run. Upstream: [#451](https://github.com/actions/deploy-pages/issues/451). |
 | `<chain> config root: tools/get.ts failed — MISMATCH (…)` from `make verify`, with a single chain, and `verify: the browser stage failed` under browser lines that all say `ok` | not your deployment: `verify.sh`'s config pass asks `/<chain>/` of a one-contract configuration, and the summary names the wrong stage ([#110](https://github.com/dnznlabs/gw44/issues/110)). The other passes are valid. |
 | Pages shows the site but HTTPS cannot be enforced | the certificate has not been issued yet. It takes a few minutes after the custom domain is set, and the tick box stays disabled until then. `.https_certificate.state` reads `approved` when it is ready. |
 | the deploy succeeds and the site serves someone else's content | the hostname was claimed before you verified the domain. § 2, and it is the reason the order in § 2 is not advice. |

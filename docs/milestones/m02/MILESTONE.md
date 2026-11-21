@@ -1,6 +1,6 @@
 # M02 — Dedicated deployment
 
-Status: not started · updated 2026-11-20
+Status: in progress · updated 2026-11-21
 
 A project deploys its own gateway to GitHub Pages from its own repository by calling one workflow, and `rake.dnzn.dev` is the first to do it. It comes now because M01 leaves a build nobody has put on a real static host: every claim so far was measured against `tools/serve.ts` on loopback.
 

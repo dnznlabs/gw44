@@ -50,9 +50,9 @@ No backends. Minimal trust boundaries between the user and the on-chain dapp.
 
 | STATUS | VERSION | AUDIT |
 |:---|:---|:---|
-| `pre-mvp` | `0.0.0` | no review, no external audit; see [SECURITY.md](SECURITY.md) |
+| `mvp`, not deployed | `0.0.0` | two-model agent review, 2026-11-20 and 2026-11-21; no external audit; see [SECURITY.md](SECURITY.md) |
 
-A working prototype from a spike. It is not deployed anywhere; `gw44` is a working name. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
+The MVP: the spike's prototype hardened, tested in three browser engines and reviewed, with a pinned build that serves one project's contracts from its own domain. It is not deployed anywhere yet; the first deployment is the next milestone. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
 
 Alpha software is alpha, act accordingly. See [Disclaimer](#disclaimer).
 

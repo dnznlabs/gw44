@@ -44,14 +44,14 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 |:-----|:-----|:-------|
 | [m01-t01](tasks/m01-t01/TASK.md) | CI running `make check`; Firefox and WebKit in `make e2e` (criteria 1, 2) | done ([#8](https://github.com/dnznlabs/gw44/pull/8)) |
 | [m01-t02](tasks/m01-t02/TASK.md) | Size cap, timeout and failover each under test; fuzz count raised (criteria 7, 8) | done ([#16](https://github.com/dnznlabs/gw44/pull/16)) |
-| [m01-t03](tasks/m01-t03/TASK.md) | `make verify` against the live fixture; reproducible build with printed hashes (criteria 3, 4, 5, 6) | not started |
+| [m01-t03](tasks/m01-t03/TASK.md) | `make verify` against the live fixture; reproducible build with printed hashes (criteria 3, 4, 5, 6) | done ([#23](https://github.com/dnznlabs/gw44/pull/23)) |
 
 ### Phase 2 — Make it handable
 
 | Task | Goal | Status |
 |:-----|:-----|:-------|
-| m01-t04 | The pinned build: one contract at any hostname (criterion 12) | not started |
-| m01-t05 | The base-URL page and `docs/DEPLOY.md` (criteria 9, 11) | not started |
+| [m01-t04](tasks/m01-t04/TASK.md) | The pinned build: one contract at any hostname (criterion 12) | not started |
+| m01-t05 | The base-URL page and `docs/DEPLOY.md` (criteria 9, 11); carried #11 and #27 | not started |
 | m01-t06 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.

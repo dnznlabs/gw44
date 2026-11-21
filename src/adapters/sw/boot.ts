@@ -2,6 +2,7 @@
 import { resolve } from "../../core/resolve.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
 import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
+import { headersAreHonourable, isRootTarget } from "./fallback.ts";
 
 // The static host serves this page for every URL. It runs only when the service worker does not
 // control the page: a first visit, a forced reload, or a browser without service workers.
@@ -29,17 +30,27 @@ function attempt(): number {
   return n;
 }
 
+const NEEDS_WORKER = "gw44: this page needs a service worker, and this browser is not providing one here.";
+
 /**
- * No service worker: fetch the root document here and write it over this page. Same origin, same
- * URL, but only the root: without a worker nothing can answer the document's relative URLs.
+ * No service worker: fetch the contract's root document here and write it over this page. Same
+ * origin, same URL, and only ever the root — without a worker nothing can answer the document's
+ * relative URLs, so a deeper path would render a document whose own subresources cannot load.
+ *
+ * It declines, with one sentence, unless all three hold: this is the top-level page, the URL is the
+ * contract's root, and the response carries no header this page cannot honour.
  */
 async function renderInline(url: URL): Promise<void> {
   const target = targetOf(url);
   if (target === null) return;
+  // Both checked before the call, so a URL that will be declined costs no chain read.
+  if (window.top !== window.self) return say(NEEDS_WORKER);
+  if (!isRootTarget(target)) return say(NEEDS_WORKER);
   const res = await resolve(target, createFetchRpc(CHAINS));
   const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
   const text = new TextDecoder().decode(res.body);
   if (res.status !== 200 || !type.startsWith("text/html")) return say(text.trim());
+  if (!headersAreHonourable(res)) return say(NEEDS_WORKER);
   document.open();
   document.write(text);
   document.close();

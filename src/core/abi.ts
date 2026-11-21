@@ -19,15 +19,6 @@ const MAX_HEADERS = 64;
 const MAX_HEADER_BYTES = 16_384;
 const utf8 = new TextEncoder();
 
-/** A hex digit's value, or -1. Indexed by character code, so no branch per digit class. */
-const NIBBLE = (() => {
-  const table = new Int8Array(128).fill(-1);
-  for (let c = 0; c < 10; c++) table[0x30 + c] = c;
-  for (let c = 0; c < 6; c++) table[0x41 + c] = 10 + c;
-  for (let c = 0; c < 6; c++) table[0x61 + c] = 10 + c;
-  return table;
-})();
-
 /**
  * Validated in the conversion loop rather than by a regular expression. `/^0x([0-9a-fA-F]{2})*$/`
  * backtracks once per byte and threw `RangeError: Maximum call stack size exceeded` above about
@@ -35,16 +26,24 @@ const NIBBLE = (() => {
  * served as a 502 that blamed the endpoints (F4, the 2026-11-20 review). One pass, no recursion, and
  * the first character that is not a hex digit throws `bad-response`.
  */
+function notHex(): never {
+  throw new GatewayError("bad-response", "result is not hex");
+}
+
+function nibble(code: number): number {
+  if (code >= 0x30 && code <= 0x39) return code - 0x30;
+  if (code >= 0x61 && code <= 0x66) return code - 0x57;
+  if (code >= 0x41 && code <= 0x46) return code - 0x37;
+  return -1;
+}
+
 export function hexToBytes(hex: string): Uint8Array {
-  if (hex.length < 2 || hex.charCodeAt(0) !== 0x30 || hex.charCodeAt(1) !== 0x78) {
-    throw new GatewayError("bad-response", "result is not hex");
-  }
-  if (hex.length % 2 !== 0) throw new GatewayError("bad-response", "result is not hex");
+  if (hex.length < 2 || hex.charCodeAt(0) !== 0x30 || hex.charCodeAt(1) !== 0x78 || hex.length % 2 !== 0) notHex();
   const out = new Uint8Array((hex.length - 2) / 2);
   for (let i = 0; i < out.length; i++) {
-    const hi = NIBBLE[hex.charCodeAt(2 + i * 2)] ?? -1;
-    const lo = NIBBLE[hex.charCodeAt(3 + i * 2)] ?? -1;
-    if (hi < 0 || lo < 0) throw new GatewayError("bad-response", "result is not hex");
+    const hi = nibble(hex.charCodeAt(2 + i * 2));
+    const lo = nibble(hex.charCodeAt(3 + i * 2));
+    if (hi < 0 || lo < 0) notHex();
     out[i] = (hi << 4) | lo;
   }
   return out;

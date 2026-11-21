@@ -19,8 +19,13 @@ export interface Target {
 
 /**
  * One project's contracts, one per chain, as `gw44.json` names them. Several chains of one project
- * share an origin and are told apart by the first path segment, so the project's storage stays
- * separate by chain while its contracts stay out of every other project's origin.
+ * share one origin and are told apart by the first path segment, which is a path and not a browser
+ * boundary: they share storage, the worker registration and any wallet permission the visitor has
+ * granted, so each is only as safe as the weakest contract configured beside it. An application
+ * that keeps per-chain state separates it by chain itself; nothing in the origin does that for it.
+ * What the prefix buys is that a document's absolute URL fails instead of reading another chain's
+ * contract, and that one project's contracts stay out of every other project's origin (decision 9;
+ * F1 of the 2026-11-20 review, which found this comment claiming the opposite).
  */
 export interface Pins {
   /** A key of `contracts`; the chain `/` goes to. */

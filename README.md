@@ -50,9 +50,15 @@ No backends. Minimal trust boundaries between the user and the on-chain dapp.
 
 | STATUS | VERSION | AUDIT |
 |:---|:---|:---|
-| `mvp`, not deployed | `0.0.0` | two-model agent review, 2026-11-20 and 2026-11-21; no external audit; see [SECURITY.md](SECURITY.md) |
+| `mvp`, test site deployed | `0.0.0` | two-model agent review, 2026-11-20 and 2026-11-21; no external audit; see [SECURITY.md](SECURITY.md) |
 
-The MVP: the spike's prototype hardened, tested in three browser engines and reviewed, with a pinned build that serves one project's contracts from its own domain. It is not deployed anywhere yet; the first deployment is the next milestone. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
+The MVP: the spike's prototype hardened, tested in three browser engines and reviewed, with a pinned build that serves one project's contracts from its own domain. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
+
+### The test site
+
+**`https://gw-test.dnzn.dev`** serves a two-chain build of the rake fixture — the same contract on Sepolia (`11155111`, the default) and Base Sepolia (`84532`), from [`test/fixtures/gw44.two-chains.json`](test/fixtures/gw44.two-chains.json). So `/` redirects to `/11155111/`, `/84532/` serves that chain's document, and any other first path segment is a 404 with no chain call.
+
+It exists to be checked, not to be depended on: it is a testnet fixture on a hostname that may be rebuilt or repointed without notice, and it is deployed by a workflow somebody runs by hand ([`.github/workflows/pages-test.yml`](.github/workflows/pages-test.yml)), never on a push. `make check-site URL=https://gw-test.dnzn.dev` checks a deployed gateway in a browser, and `VERIFY_SITE=https://gw-test.dnzn.dev make verify` compares the bytes it serves with what the chain returns.
 
 Alpha software is alpha, act accordingly. See [Disclaimer](#disclaimer).
 

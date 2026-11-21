@@ -50,8 +50,8 @@ The build on GitHub Pages under a real hostname, checked in three engines. Finis
 | Task | Goal | Status |
 |:-----|:-----|:-------|
 | [m02-t02](tasks/m02-t02/TASK.md) | The reusable workflow, the static copies and their hash check; the test site redeployed through it (criteria 3, 4) | not started |
-| m02-t03 | `docs/DEPLOY.md`, followed by a second reader; the phone check (criteria 6, 7) | not started |
-| m02-t04 | The carried changes to reviewed files, made together, and one review run over them: #57, #58, #59, #62, #63, #73, #74, #82 | not started |
+| [m02-t04](tasks/m02-t04/TASK.md) | The carried changes to reviewed files, made together, and one review run over them: #57, #58, #59, #62, #63, #73, #74, #82 | not started |
+| [m02-t03](tasks/m02-t03/TASK.md) | `docs/DEPLOY.md`, followed by a second reader; the phone check (criteria 6, 7) | not started |
 
 ### Phase 3 — The first project
 
@@ -59,7 +59,7 @@ The build on GitHub Pages under a real hostname, checked in three engines. Finis
 |:-----|:-----|:-------|
 | rake m05-t04 | `rake.dnzn.dev` (criterion 8), planned and tracked in rake | not started |
 
-Tasks run in order. `TASK.md` for m02-t01 is written while m01-t06 is being built.
+Tasks run in the order listed: m02-t04 before m02-t03, so the guide describes the code that ships. `TASK.md` for m02-t01 is written while m01-t06 is being built.
 
 ## One-way doors
 

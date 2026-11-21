@@ -5,16 +5,18 @@
 //   GW44_PIN=<chain>:<address> node tools/get.ts https://any.host/  resolve as a pinned build does
 //   GW44_CONFIG=gw44.json node tools/get.ts https://any.host/<chain>/   …as a configured build does
 import { readFile } from "node:fs/promises";
-import { createFetchRpc, type Chains } from "../src/adapters/rpc/fetch.ts";
+import { createFetchRpc } from "../src/adapters/rpc/fetch.ts";
 import { errorResponse, resolve } from "../src/core/resolve.ts";
 import { parsePin, parsePins, parseTarget, pinnedTarget } from "../src/core/target.ts";
+import { readChains } from "./chains.ts";
 
 const arg = process.argv[2];
 if (arg === undefined) {
   console.error("usage: node tools/get.ts <gateway url>");
   process.exit(2);
 }
-const chains = JSON.parse(await readFile(process.env["GW44_CHAINS"] ?? "chains.json", "utf8")) as Chains;
+// The build's validator, so this instrument believes exactly the endpoints a build would (#63).
+const chains = await readChains(process.env["GW44_CHAINS"] ?? "chains.json", (p) => readFile(p, "utf8"));
 const started = performance.now();
 let res;
 try {
@@ -46,7 +48,8 @@ try {
     console.error(`location: ${target.redirect}`);
     process.exit(0);
   }
-  res = await resolve(target, createFetchRpc(chains));
+  // The build's framing setting too, so a root document's headers here are a build's headers (#57).
+  res = await resolve(target, createFetchRpc(chains), pins?.frame ?? "self");
 } catch (error) {
   res = errorResponse(error);
 }

@@ -1,4 +1,4 @@
-import { type Pins, type Target, parseTarget, pinnedTarget } from "../../core/target.ts";
+import { type Frame, type Pins, type Target, parseTarget, pinnedTarget } from "../../core/target.ts";
 import type { Chains } from "../rpc/fetch.ts";
 
 // Replaced by the build with the contents of the chains file. Baked in rather than fetched, so the
@@ -23,6 +23,11 @@ export const CHAINS: Chains = __GW44_CHAINS__;
 export const targetOf: (url: URL) => Target | null = __GW44_PINNED__
   ? (url: URL) => pinnedTarget(url, __GW44_PINS__ as Pins)
   : parseTarget;
-/** Reserved on every origin the gateway serves; a contract's own resource of this name is shadowed. */
+
+/** The build's framing setting for a root document (#57). An unpinned build and a `PIN=` build have
+ *  no configuration file to say otherwise, so both take the default. */
+export const FRAME: Frame = (__GW44_PINNED__ ? (__GW44_PINS__ as Pins).frame : undefined) ?? "self";
+/** Reserved on every origin the gateway serves: the worker answers this path itself with a 404 and
+ *  no chain read, so a contract's own resource of this name is shadowed rather than served (#62). */
 export const SW_PATH = "/gw44-sw.js";
 export const PURGE = "gw44:purge";

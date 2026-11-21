@@ -32,10 +32,26 @@ export interface Pins {
   default: string;
   /** Chain id to lower-case address. At least one. */
   contracts: Record<string, string>;
+  /** Who may frame a root document; `"self"` when absent. See `Frame`. */
+  frame?: Frame;
 }
+
+/**
+ * Who may frame a contract's root document. `"self"` — the default, and what a `PIN=` build takes —
+ * serves it with `content-security-policy: frame-ancestors 'self'`; `"any"` omits the header and
+ * lets any site frame it. The whole setting is those two words: a project that needs a policy of its
+ * own serves its page from `request()`, where it sets its own headers (#57).
+ */
+export type Frame = "self" | "any";
 
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 const CHAIN = /^[1-9][0-9]{0,15}$/;
+
+/** A decimal chain id: no leading zeros, no sign, no separators. The URL form's rule, exported so
+ *  the chains file is checked against the same one rather than a second copy of it. */
+export function isChainId(value: string): boolean {
+  return CHAIN.test(value);
+}
 
 /** Loopback only: `localhost`, any `*.localhost`, 127.0.0.0/8 and `[::1]`. */
 export function isLoopback(hostname: string): boolean {
@@ -118,9 +134,13 @@ export function parsePins(value: unknown): Pins {
   }
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) {
-    if (key !== "default" && key !== "contracts") {
+    if (key !== "default" && key !== "contracts" && key !== "frame") {
       throw new GatewayError("bad-target", `configuration has no key ${JSON.stringify(key)}`);
     }
+  }
+  const frame = record["frame"];
+  if (frame !== undefined && frame !== "self" && frame !== "any") {
+    throw new GatewayError("bad-target", `configuration "frame" must be "self" or "any"; got ${describe(frame)}`);
   }
   const raw = record["contracts"];
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -156,7 +176,8 @@ export function parsePins(value: unknown): Pins {
       `configuration "default" must be one of ${chains.join(", ")}; got ${describe(fallback)}`,
     );
   }
-  return { default: fallback, contracts };
+  // Absent rather than defaulted here, so one place decides what absent means: `frameOf`.
+  return frame === undefined ? { default: fallback, contracts } : { default: fallback, contracts, frame };
 }
 
 function describe(value: unknown): string {

@@ -1,7 +1,7 @@
 import { HTML_SELECTOR, decodeRequestResult, decodeString, encodeRequest } from "./abi.ts";
 import { GatewayError } from "./errors.ts";
 import { type GatewayResponse, type Rpc, RpcRevert } from "./ports.ts";
-import type { Target } from "./target.ts";
+import type { Frame, Target } from "./target.ts";
 
 /**
  * Headers a contract may set on its own response. An allowlist, because the same core runs behind
@@ -29,6 +29,16 @@ const FIXED_HEADERS: [string, string][] = [
 
 const HEADER_VALUE = /^[\t\x20-\x7e]*$/;
 
+/**
+ * The framing rule a root document is served with unless the build says `"any"` (#57).
+ *
+ * `html()` returns bytes and no headers, so a root document had no framing rule at all and any site
+ * could put a contract's page in a frame and read the visitor's clicks against it. The gateway
+ * supplies the rule the document cannot: same-origin framing only, which for a gateway origin means
+ * the contract's own pages.
+ */
+export const ROOT_FRAME_POLICY = "frame-ancestors 'self'";
+
 function respond(status: number, type: string, body: Uint8Array, extra: [string, string][] = []): GatewayResponse {
   return { status, headers: [["content-type", type], ...extra, ...FIXED_HEADERS], body };
 }
@@ -47,10 +57,11 @@ async function call(target: Target, rpc: Rpc, data: string): Promise<Uint8Array>
   return out;
 }
 
-async function html(target: Target, rpc: Rpc): Promise<GatewayResponse> {
+async function html(target: Target, rpc: Rpc, frame: Frame): Promise<GatewayResponse> {
   const body = decodeString(await call(target, rpc, HTML_SELECTOR));
   if (body.length === 0) throw new GatewayError("not-found", "html() returned an empty document");
-  return respond(200, "text/html; charset=utf-8", body);
+  const framing: [string, string][] = frame === "any" ? [] : [["content-security-policy", ROOT_FRAME_POLICY]];
+  return respond(200, "text/html; charset=utf-8", body, framing);
 }
 
 async function request(target: Target, rpc: Rpc): Promise<GatewayResponse> {
@@ -79,13 +90,16 @@ async function request(target: Target, rpc: Rpc): Promise<GatewayResponse> {
 /**
  * The whole gateway: the root is ERC-8244 `html()`, every other path is ERC-5219 `request()`.
  * Never throws; a failure is a response.
+ *
+ * `frame` is the build's framing setting and applies to a root document only: a sub-path's headers
+ * are the contract's, within `PASSED_HEADERS`, and a contract that wants a policy there sets one.
  */
-export async function resolve(target: Target, rpc: Rpc): Promise<GatewayResponse> {
+export async function resolve(target: Target, rpc: Rpc, frame: Frame = "self"): Promise<GatewayResponse> {
   try {
     if (!rpc.supports(target.chain)) {
       throw new GatewayError("unknown-chain", `chain ${target.chain} is not configured on this gateway`);
     }
-    return await (target.resource.length === 0 ? html(target, rpc) : request(target, rpc));
+    return await (target.resource.length === 0 ? html(target, rpc, frame) : request(target, rpc));
   } catch (error) {
     if (error instanceof RpcRevert) {
       return errorResponse(new GatewayError("not-found", "the contract does not serve this resource"));

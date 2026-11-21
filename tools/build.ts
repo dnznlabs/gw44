@@ -7,6 +7,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { type Pins, parsePin, parsePins } from "../src/core/target.ts";
+import { readChains } from "./chains.ts";
+import { inlineBoot } from "./inline.ts";
 
 const out = process.env["GW44_OUT"] ?? "dist";
 
@@ -22,24 +24,35 @@ function listing(pins: Pins): string {
 const EXPECTED = ["404.html", "gw44-sw.js", "index.html"];
 /** The worker is code every visitor of every contract executes, so its size is a gate, not a note. */
 const SW_LIMIT = 16_384;
-const chains = JSON.parse(await readFile(process.env["GW44_CHAINS"] ?? "chains.json", "utf8")) as unknown;
+/* Validated here rather than trusted: these endpoints are compiled into the worker, so a bad one
+   is not a build-time inconvenience but a URL every visitor's browser then talks to (#63). */
+const chains = await readChains(process.env["GW44_CHAINS"] ?? "chains.json", (p) => readFile(p, "utf8"));
 
 /* The contracts are compiled in, like the endpoints: the bytes a visitor runs are the whole of what
    decides what is served. An unpinned build defines them as null and keeps every chain. */
+/* Set but empty is a mistake, not a default. CI templating a value that was not provided used to
+   produce an unpinned build with every chain in the chains file, distinguishable only by the log's
+   first line (#73). Unset still means unpinned, which is what a developer typing `make build` wants. */
+for (const name of ["GW44_PIN", "GW44_CONFIG"] as const) {
+  const value = process.env[name];
+  if (value !== undefined && value.trim() === "") {
+    throw new Error(`${name} is set but empty; unset it for an unpinned build, or give it a value`);
+  }
+}
+
 const raw = process.env["GW44_PIN"] ?? "";
 const configPath = process.env["GW44_CONFIG"] ?? "";
 if (raw !== "" && configPath !== "") {
   throw new Error("GW44_PIN and GW44_CONFIG both set; a build serves one configuration, so pick one");
 }
 let pins: Pins | null = null;
-let endpoints = chains;
+let endpoints: Readonly<Record<string, readonly string[]>> = chains;
 if (raw !== "" || configPath !== "") {
   pins =
     configPath === "" ? parsePin(raw) : parsePins(JSON.parse(await readFile(configPath, "utf8")) as unknown);
-  const all = chains as Record<string, unknown>;
-  const only: Record<string, unknown> = {};
+  const only: Record<string, readonly string[]> = {};
   for (const chain of Object.keys(pins.contracts)) {
-    const endpointsFor = all[chain];
+    const endpointsFor = chains[chain];
     if (endpointsFor === undefined) {
       const where = configPath === "" ? `pin ${raw}` : configPath;
       throw new Error(`${where} names chain ${chain}, which the chains file does not carry`);
@@ -75,10 +88,29 @@ const [sw, boot, shell] = await Promise.all([
   bundle("src/adapters/sw/boot.ts"),
   readFile("src/adapters/sw/shell.html", "utf8"),
 ]);
-// A function replacement: a string one would expand `$&` and friends found in the minified script.
-const page = shell.replace("/*@boot@*/", () => boot.replaceAll("</script", "<\\/script"));
+const page = inlineBoot(shell, boot);
 
 await mkdir(out, { recursive: true });
+
+/* Both gates run before anything is written (#74). They used to run after, so a build that failed
+   either had already overwritten `index.html` and `404.html` — and a deploy step that ignored the
+   exit code shipped an oversized worker, or a directory mixing new files with stale ones. A failed
+   build now leaves the output directory as it found it.
+
+   The size gate measures the bytes that would be written rather than the string's length in UTF-16
+   units, which are equal only while the bundler emits ASCII. */
+const swBytes = Buffer.byteLength(sw);
+if (swBytes > SW_LIMIT) {
+  throw new Error(`gw44-sw.js would be ${swBytes} B, over the ${SW_LIMIT} B limit; nothing was written`);
+}
+const before = (await readdir(out)).sort();
+const strays = before.filter((n) => !EXPECTED.includes(n));
+if (strays.length > 0) {
+  throw new Error(
+    `${out}/ holds ${strays.join(", ")}; the deployable is only ${EXPECTED.join(", ")}; run 'make clean'`,
+  );
+}
+
 await Promise.all([
   writeFile(`${out}/gw44-sw.js`, sw),
   writeFile(`${out}/index.html`, page),
@@ -90,26 +122,15 @@ await Promise.all([
    that changed it. Sorted by name so two runs are diffable line by line. */
 const names = (await readdir(out)).sort();
 const lines: string[] = [];
-const sizes = new Map<string, number>();
 for (const name of names) {
   const bytes = await readFile(`${out}/${name}`);
-  sizes.set(name, bytes.length);
   lines.push(`${createHash("sha256").update(bytes).digest("hex")}  ${String(bytes.length).padStart(7)}  ${name}`);
 }
 console.log(pins === null ? `built ${out}/:` : `built ${out}/ (pinned to ${listing(pins)}):`);
 for (const line of lines) console.log(`  ${line}`);
 
-const unexpected = names.filter((n) => !EXPECTED.includes(n));
-if (unexpected.length > 0) {
-  throw new Error(
-    `${out}/ holds ${unexpected.join(", ")}; the deployable is only ${EXPECTED.join(", ")}; run 'make clean'`,
-  );
-}
-/* The gate reads the bytes on disk, which the hash loop above already measured. `sw.length` is a
-   string's length in UTF-16 units and equals the byte count only while the bundler emits ASCII,
-   which is its default and not a thing this file asserts. */
-const swBytes = sizes.get("gw44-sw.js");
-if (swBytes === undefined) throw new Error(`${out}/ has no gw44-sw.js`);
-if (swBytes > SW_LIMIT) {
-  throw new Error(`gw44-sw.js is ${swBytes} B, over the ${SW_LIMIT} B limit`);
+/* Asserted after the write as well, against the bytes on disk: the gates above decided on what was
+   about to be written, and this catches a write that did not produce what it was given. */
+if (names.join(",") !== EXPECTED.join(",")) {
+  throw new Error(`${out}/ holds ${names.join(", ")} after the write; expected ${EXPECTED.join(", ")}`);
 }

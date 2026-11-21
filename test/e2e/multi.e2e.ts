@@ -79,14 +79,41 @@ const engine = ENGINE_TYPES[engineName as EngineName];
 
 let browser: Browser;
 let server: ChildProcess;
+let anyServer: ChildProcess;
 let port = 0;
+let anyPort = 0;
+let framerPort = 0;
 const at = (path: string): string => `http://localhost:${port}${path}`;
+/** The same project built with `"frame": "any"`, on its own origin (#57). */
+const atAny = (path: string): string => `http://localhost:${anyPort}${path}`;
+
+/* A page on another origin that frames one URL. Served from 127.0.0.1 while the gateway is on
+   localhost: same host, different origin, which is exactly what `frame-ancestors 'self'` is about.
+   The URL is this file's own and is placed in an attribute whose quote it cannot contain. */
+const framer = createServer((req, res) => {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  const framed = url.searchParams.get("u") ?? "";
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(`<!doctype html><title>framer</title><iframe id="f" src="${framed.replaceAll('"', "")}"></iframe>`);
+});
+const framing = (target: string): string =>
+  `http://127.0.0.1:${framerPort}/?u=${encodeURIComponent(target)}`;
 
 before(async () => {
   const probe = createServer();
-  const [aPort, bPort, freePort] = await Promise.all([listen(a.server), listen(b.server), listen(probe)]);
+  const probeAny = createServer();
+  const [aPort, bPort, freePort, freeAnyPort, framed] = await Promise.all([
+    listen(a.server),
+    listen(b.server),
+    listen(probe),
+    listen(probeAny),
+    listen(framer),
+  ]);
   probe.close();
+  probeAny.close();
   port = freePort;
+  anyPort = freeAnyPort;
+  framerPort = framed;
   const out = mkdtempSync(join(tmpdir(), "gw44-multi-"));
   // Both files outside GW44_OUT: the build refuses an output directory holding anything else.
   const inputs = mkdtempSync(join(tmpdir(), "gw44-multi-in-"));
@@ -103,18 +130,43 @@ before(async () => {
   execFileSync(process.execPath, ["tools/build.ts"], {
     env: { ...process.env, GW44_CHAINS: chains, GW44_OUT: out, GW44_CONFIG: config },
   });
-  server = spawn(process.execPath, ["tools/serve.ts", out], {
-    env: { ...process.env, GW44_PORT: String(port) },
-    stdio: ["ignore", "pipe", "inherit"],
+  /* The second build: the same project, the same contracts, `"frame": "any"` the only difference,
+     so the pair of framing cases below differ in the setting and in nothing else (#57). */
+  const outAny = mkdtempSync(join(tmpdir(), "gw44-multi-any-"));
+  const configAny = join(inputs, "gw44.any.json");
+  writeFileSync(
+    configAny,
+    JSON.stringify({
+      default: A_CHAIN,
+      contracts: { [A_CHAIN]: A_ADDRESS, [B_CHAIN]: B_ADDRESS },
+      frame: "any",
+    }),
+  );
+  execFileSync(process.execPath, ["tools/build.ts"], {
+    env: { ...process.env, GW44_CHAINS: chains, GW44_OUT: outAny, GW44_CONFIG: configAny },
   });
-  await new Promise((done) => server.stdout?.once("data", done));
+  [server, anyServer] = [
+    spawn(process.execPath, ["tools/serve.ts", out], {
+      env: { ...process.env, GW44_PORT: String(port) },
+      stdio: ["ignore", "pipe", "inherit"],
+    }),
+    spawn(process.execPath, ["tools/serve.ts", outAny], {
+      env: { ...process.env, GW44_PORT: String(anyPort) },
+      stdio: ["ignore", "pipe", "inherit"],
+    }),
+  ];
+  await Promise.all([
+    new Promise((done) => server.stdout?.once("data", done)),
+    new Promise((done) => anyServer.stdout?.once("data", done)),
+  ]);
   browser = await engine.launch();
 });
 
 after(async () => {
   await browser?.close();
   server?.kill();
-  for (const s of [a.server, b.server]) {
+  anyServer?.kill();
+  for (const s of [a.server, b.server, framer]) {
     s.closeAllConnections();
     s.close();
   }
@@ -192,6 +244,21 @@ test("a first segment that is not a configured chain is 404 and costs no call", 
   await context.close();
 });
 
+/* The sentence the page shows for an unconfigured first segment, with no worker involved: this is
+   the shell's own report, and before #82 it was `gw44: malformed URL` — the one message the page
+   has for a URL it cannot parse at all, shown for the ordinary case of a mistyped chain. The worker
+   serves `gw44: no contract at this path` for the same URL, so the two now agree. */
+test("a cold visit to an unconfigured chain says no contract at this path", async () => {
+  const context = await fresh({ serviceWorkers: "block" });
+  const page = await context.newPage();
+
+  await page.goto(at("/nope/"));
+  await page.waitForFunction(() => (document.getElementById("gw44")?.textContent ?? "").startsWith("gw44:"));
+
+  assert.equal(await page.textContent("#gw44"), "gw44: no contract at this path");
+  await context.close();
+});
+
 /* Decision 9's reason for the prefix: an absolute URL in a document must fail rather than quietly
    read the default chain's contract, which is what a single shared origin would have done. */
 test("an absolute URL from a document under one prefix reaches no contract", async () => {
@@ -265,5 +332,43 @@ test("without service workers the root still ends on the default chain's prefix"
 
   assert.equal(await page.textContent("#v"), "A");
   assert.equal(new URL(page.url()).pathname, `/${A_CHAIN}/`);
+  await context.close();
+});
+
+/* #57, and the reason for it: `html()` returns bytes and no headers, so without a framing rule any
+   site could frame a contract's page and read a visitor's clicks against it. Each case warms the
+   worker first — an unwarmed frame gets the static host's shell, which never reaches the policy —
+   and each ends on a top-level control, so an absent `#v` in the frame is the policy's doing and not
+   a document that never renders anywhere. */
+test("a cross-origin frame of a root document is refused by default", async () => {
+  const context = await fresh();
+  const page = await context.newPage();
+  await page.goto(at(`/${A_CHAIN}/`));
+  await page.waitForSelector("#v");
+
+  await page.goto(framing(at(`/${A_CHAIN}/`)));
+  const framed = page.frameLocator("#f").locator("#v");
+
+  await assert.rejects(
+    framed.waitFor({ state: "attached", timeout: 5000 }),
+    "the document rendered inside a cross-origin frame",
+  );
+  // The control, on the same contract and the same origin: it does render at the top level.
+  await page.goto(at(`/${A_CHAIN}/`));
+  assert.equal(await page.textContent("#v"), "A");
+  await context.close();
+});
+
+test('with "frame": "any" another origin may frame the root document', async () => {
+  const context = await fresh();
+  const page = await context.newPage();
+  await page.goto(atAny(`/${A_CHAIN}/`));
+  await page.waitForSelector("#v");
+
+  await page.goto(framing(atAny(`/${A_CHAIN}/`)));
+  const framed = page.frameLocator("#f").locator("#v");
+  await framed.waitFor({ state: "attached" });
+
+  assert.equal(await framed.textContent(), "A");
   await context.close();
 });

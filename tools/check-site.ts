@@ -128,7 +128,8 @@ async function main(): Promise<void> {
     const shown = await page.title();
     report(
       "an unconfigured path is the gateway's 404 and not the application",
-      body.includes("gw44:") && shown !== "RAKE",
+      // The sentence, not just the prefix: before #82 this page said `gw44: malformed URL` here.
+      body.includes("gw44: no contract at this path") && shown !== "RAKE",
       `body ${JSON.stringify(body.trim().slice(0, 40))}`,
     );
     await context.close();

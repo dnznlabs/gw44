@@ -5,21 +5,24 @@ import { type MemoryCalls, createMemoryRpc, memoryKey } from "../src/adapters/rp
 import { HTML_SELECTOR, encodeRequest } from "../src/core/abi.ts";
 import { GatewayError } from "../src/core/errors.ts";
 import type { Rpc } from "../src/core/ports.ts";
-import { resolve } from "../src/core/resolve.ts";
-import { parseTarget } from "../src/core/target.ts";
+import { ROOT_FRAME_POLICY, resolve } from "../src/core/resolve.ts";
+import { type Frame, parseTarget } from "../src/core/target.ts";
 import { ADDRESS, htmlResult, requestResult } from "./helpers.ts";
 
 const text = (b: Uint8Array): string => new TextDecoder().decode(b);
 const header = (headers: [string, string][], name: string): string | undefined =>
   headers.find(([k]) => k === name)?.[1];
 
-function gateway(calls: [data: string, result: Uint8Array][]): (path: string) => ReturnType<typeof resolve> {
+function gateway(
+  calls: [data: string, result: Uint8Array][],
+  frame?: Frame,
+): (path: string) => ReturnType<typeof resolve> {
   const map: MemoryCalls = new Map(calls.map(([data, result]) => [memoryKey("1", ADDRESS, data), result]));
   const rpc = createMemoryRpc(["1"], map);
   return (path) => {
     const target = parseTarget(new URL(`https://${ADDRESS}.1.gw44.io${path}`));
     assert.ok(target);
-    return resolve(target, rpc);
+    return frame === undefined ? resolve(target, rpc) : resolve(target, rpc, frame);
   };
 }
 
@@ -186,4 +189,55 @@ test("the real fetch adapter behind resolve(): a failing endpoint is 502 text, w
   for (const leak of ["rate limited", "0bad51de", "support@example.invalid", "429"]) {
     assert.doesNotMatch(body, new RegExp(leak), `the endpoint's body reached the client: ${leak}`);
   }
+});
+
+/* The framing rule a root document is served with (#57). `html()` returns bytes and no headers, so
+   without this the page could be framed by any site; the gateway supplies what the document cannot. */
+test("a root document is served frame-ancestors 'self' by default", async () => {
+  for (const frame of [undefined, "self"] as const) {
+    const get = gateway([[HTML_SELECTOR, htmlResult("<!doctype html><p>hi</p>")]], frame);
+
+    const res = await get("/");
+
+    assert.equal(header(res.headers, "content-security-policy"), ROOT_FRAME_POLICY, String(frame));
+  }
+});
+
+test('"any" omits the header, which is the whole of what it means', async () => {
+  const get = gateway([[HTML_SELECTOR, htmlResult("<!doctype html><p>hi</p>")]], "any");
+
+  const res = await get("/");
+
+  assert.equal(res.status, 200);
+  assert.equal(header(res.headers, "content-security-policy"), undefined);
+});
+
+/* Only the root. A sub-path's headers are the contract's, within the allowlist, and a gateway header
+   there would silently override a policy the contract set for its own resource. */
+test("a sub-path carries no framing header, with either setting", async () => {
+  const calls: [string, Uint8Array][] = [
+    [encodeRequest(["page"], []), requestResult(200, "<p>page</p>", [["Content-Type", "text/html"]])],
+  ];
+  for (const frame of [undefined, "self", "any"] as const) {
+    const res = await gateway(calls, frame)("/page");
+
+    assert.equal(res.status, 200);
+    assert.equal(header(res.headers, "content-security-policy"), undefined, String(frame));
+  }
+});
+
+test("a contract's own policy on a sub-path is still passed through", async () => {
+  const calls: [string, Uint8Array][] = [
+    [
+      encodeRequest(["page"], []),
+      requestResult(200, "<p>page</p>", [
+        ["Content-Type", "text/html"],
+        ["Content-Security-Policy", "frame-ancestors https://example.com"],
+      ]),
+    ],
+  ];
+
+  const res = await gateway(calls)("/page");
+
+  assert.equal(header(res.headers, "content-security-policy"), "frame-ancestors https://example.com");
 });

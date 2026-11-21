@@ -35,6 +35,12 @@ const calls = new Map<string, Uint8Array>([
     encodeRequest(PATH_FORM_RESOURCE, []),
     requestResult(200, '<!doctype html><title>path</title><h1 id="v">path-form</h1>', [["Content-Type", "text/html"]]),
   ],
+  /* A contract that does serve the gateway's own script path, so the worker's 404 is a decision and
+     not the absence of an answer (#62). */
+  [
+    encodeRequest(["gw44-sw.js"], []),
+    requestResult(200, 'globalThis.pwned = "from the contract"', [["Content-Type", "text/javascript"]]),
+  ],
 ]);
 /** Every call the chain saw, so a test can assert what was asked of whom. */
 const seen: { to: string; data: string }[] = [];
@@ -176,6 +182,43 @@ test("a path-form path naming another contract is a resource of the pinned contr
   assert.deepEqual(
     made.filter((c) => c.to !== ADDRESS),
     [],
+  );
+  await context.close();
+});
+
+/* The worker's own path, which under a pin would otherwise be a resource of the pinned contract:
+   the contract here answers `gw44-sw.js` with a script, and the test is that the page never gets it
+   and the chain is never asked (#62). Read from a controlled document, because that is the only way
+   the request reaches the worker's fetch handler at all. */
+test("the worker answers its own path, in either spelling, with a 404 and no call", async () => {
+  const context = await fresh();
+  const page = await context.newPage();
+  await page.goto(`http://localhost:${port}/`);
+  await page.waitForSelector("#v");
+  await page.waitForFunction(() => document.documentElement.dataset["widget"] === "ran");
+
+  const at = seen.length;
+  /* Both spellings: `/%67w44-sw.js` is a different `pathname` and the same resource once the path is
+     decoded, which is the form a contract would be asked for (A12, the 2026-11-21b review). */
+  const got = await page.evaluate(async () =>
+    Promise.all(
+      ["/gw44-sw.js", "/%67w44-sw.js"].map(async (path) => {
+        const res = await fetch(path);
+        return { path, status: res.status, type: res.headers.get("content-type"), body: await res.text() };
+      }),
+    ),
+  );
+  const wanted = encodeRequest(["gw44-sw.js"], []);
+
+  for (const one of got) {
+    assert.equal(one.status, 404, one.path);
+    assert.match(one.type ?? "", /^text\/plain/, one.path);
+    assert.match(one.body, /^gw44: \/gw44-sw\.js is the gateway's own script/, one.path);
+  }
+  assert.deepEqual(
+    seen.slice(at).filter((c) => c.data === wanted),
+    [],
+    "the chain was asked for the worker's path",
   );
   await context.close();
 });

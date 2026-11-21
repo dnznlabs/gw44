@@ -1,15 +1,20 @@
 /// <reference lib="dom" />
+import { GatewayError } from "../../core/errors.ts";
 import { resolve } from "../../core/resolve.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
-import { headersAreHonourable, isRootTarget } from "./fallback.ts";
+import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
+import {
+  MAX_ATTEMPTS,
+  attemptsFrom,
+  attemptsValue,
+  headersAreHonourable,
+  isRootTarget,
+} from "./fallback.ts";
 
 // The static host serves this page for every URL. It runs only when the service worker does not
 // control the page: a first visit, a forced reload, or a browser without service workers.
 
 const ATTEMPTS = "gw44:boot";
-const WINDOW_MS = 10_000;
-const MAX_ATTEMPTS = 2;
 const WORKER_MS = 4000;
 
 function say(message: string): void {
@@ -17,17 +22,17 @@ function say(message: string): void {
   if (el) el.textContent = message;
 }
 
-/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page. */
+/** Counts reloads inside a short window, so a worker that never takes control cannot loop the page.
+ *  The reading of the stored value is `fallback.ts`'s, where it is tested without a browser. */
 function attempt(): number {
-  let n = 0;
   try {
-    const [count, at] = (sessionStorage.getItem(ATTEMPTS) ?? "0:0").split(":").map(Number);
-    if (Date.now() - (at ?? 0) < WINDOW_MS) n = count ?? 0;
-    sessionStorage.setItem(ATTEMPTS, `${n + 1}:${Date.now()}`);
+    const now = Date.now();
+    const n = attemptsFrom(sessionStorage.getItem(ATTEMPTS), now);
+    sessionStorage.setItem(ATTEMPTS, attemptsValue(n, now));
+    return n;
   } catch {
     return MAX_ATTEMPTS; // storage blocked: no loop guard, so do not reload at all
   }
-  return n;
 }
 
 const NEEDS_WORKER = "gw44: this page needs a service worker, and this browser is not providing one here.";
@@ -46,7 +51,7 @@ async function renderInline(url: URL): Promise<void> {
   // Both checked before the call, so a URL that will be declined costs no chain read.
   if (window.top !== window.self) return say(NEEDS_WORKER);
   if (!isRootTarget(target)) return say(NEEDS_WORKER);
-  const res = await resolve(target, createFetchRpc(CHAINS));
+  const res = await resolve(target, createFetchRpc(CHAINS), FRAME);
   const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
   const text = new TextDecoder().decode(res.body);
   if (res.status !== 200 || !type.startsWith("text/html")) return say(text.trim());
@@ -70,8 +75,12 @@ async function boot(): Promise<void> {
        itself, but a script navigation does not, so without this a first visit to `/#/docs` landed
        on `/<default>/` while every later visit landed on `/<default>/#/docs`. */
     if (target.redirect !== undefined) return void location.replace(target.redirect + location.hash);
-  } catch {
-    return say("gw44: malformed URL");
+  } catch (error) {
+    /* A configured build throws rather than returning null for a first segment it has no contract
+       for, and that is the ordinary case of a visitor mistyping a chain — not a malformed URL. The
+       worker serves `gw44: no contract at this path` there, so the page without a worker says the
+       same sentence (#82). Anything that is not the gateway's own error keeps the old one. */
+    return say(error instanceof GatewayError ? `gw44: ${error.message}` : "gw44: malformed URL");
   }
   if (!("serviceWorker" in navigator) || attempt() >= MAX_ATTEMPTS) return renderInline(url);
   try {

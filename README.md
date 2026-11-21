@@ -151,6 +151,14 @@ A project deployed to more than one chain names its contract on each, by convent
 make build CONFIG=gw44.json
 ```
 
+One more key is accepted, and no others:
+
+| Key | Values | Default | What it does |
+|:--|:--|:--|:--|
+| `frame` | `"self"`, `"any"` | `"self"` | Who may put a root document in a frame. `"self"` serves it with `content-security-policy: frame-ancestors 'self'`, so only the project's own pages may frame it; `"any"` omits the header and lets any site frame it. |
+
+`"any"` is for a project whose page is meant to be embedded. The setting is those two words and not a policy of its own: a project that needs more serves its page from `request()`, where it sets its own headers. A `PIN=` build has no configuration file and takes the default.
+
 The URL layout follows the count, and only the configured chains' endpoints are compiled in:
 
 | Configuration | `/` | `/<chain>/` | anything else |

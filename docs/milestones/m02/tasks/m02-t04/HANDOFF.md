@@ -1,6 +1,6 @@
 # m02-t04 — handoff
 
-PR: #TBD · Branch: `m02/t04-carried` · 2026-11-21
+PR: #102 · Branch: `m02/t04-carried` · 2026-11-21
 
 Eight findings the two reviews left open are closed, each with a test that fails at the branch point and passes at the head, and the review ran once over the result. The changes are in `src/core/resolve.ts`, `src/core/target.ts`, `src/adapters/sw/{sw,boot,config,fallback}.ts`, `tools/build.ts` and two new files under review scope, `tools/inline.ts` and `tools/chains.ts`. The configuration file gains one key, `"frame"`, and nothing else about any URL form changed.
 

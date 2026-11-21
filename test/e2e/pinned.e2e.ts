@@ -158,10 +158,22 @@ test("a path-form path naming another contract is a resource of the pinned contr
   const at = seen.length;
   await page.goto(`http://localhost:${port}/1/${OTHER}/`);
   await page.waitForSelector("#v");
+  /* Filtered by calldata, not sliced raw: under a pin every path is the contract's resource, so the
+     browser's own `/favicon.ico` is an eth_call too, and Firefox and WebKit ask for it where the
+     headless Chromium shell does not. What matters is that this path was asked of the pinned
+     address exactly once, and that nothing was asked of any other address. */
+  const wanted = encodeRequest(PATH_FORM_RESOURCE, []);
   const made = seen.slice(at);
 
   assert.equal(await page.textContent("#v"), "path-form");
-  assert.deepEqual(made, [{ to: ADDRESS, data: encodeRequest(PATH_FORM_RESOURCE, []) }]);
+  assert.deepEqual(
+    made.filter((c) => c.data === wanted),
+    [{ to: ADDRESS, data: wanted }],
+  );
+  assert.deepEqual(
+    made.filter((c) => c.to !== ADDRESS),
+    [],
+  );
   await context.close();
 });
 

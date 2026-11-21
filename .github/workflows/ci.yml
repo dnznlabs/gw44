@@ -43,6 +43,10 @@ jobs:
         run: devbox run -- npx playwright-core install --with-deps chromium-headless-shell firefox webkit
 
       - name: Typecheck and unit tests
+        env:
+          # The decoder fuzz defaults to 20,000 so `make test` stays quick for a contributor; CI is
+          # where the million runs. A non-integer value fails the test rather than falling back.
+          GW44_FUZZ_RUNS: "1000000"
         run: devbox run -- make test
 
       - name: Browser tests, three engines

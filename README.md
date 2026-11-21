@@ -1,6 +1,6 @@
 # DNZN // GW44
 
-A web gateway for contracts that serve their own front end: `/` is the contract's [ERC-8244](https://github.com/ethereum/ERCs/pull/1712) `html()`, every other path is its [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) `request()`.
+A web gateway for contracts that serve their own front end: `/` is the contract's [ERC-8244](https://eip.tools/eip/8244) `html()`, every other path is its [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) `request()`.
 
 by **Denizen.** // dxnzn.wei
 

@@ -1,6 +1,6 @@
 # M01 — MVP
 
-Status: in progress · updated 2026-11-20
+Status: done 2026-11-21 · every criterion re-run on `main` at `f41f839`
 
 The spike's prototype works in one browser engine on one machine. This milestone makes it something a stranger can clone, verify and deploy: the same behaviour proven in three engines and in CI, limits enforced rather than assumed, a build whose output can be checked against the source, and a security review of record. It comes first because M02 publishes whatever this leaves.
 
@@ -54,6 +54,6 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 | [m01-t04](tasks/m01-t04/TASK.md) | The pinned build: one contract at any hostname (criterion 12) | done ([#35](https://github.com/dnznlabs/gw44/pull/35)) |
 | [m01-t05](tasks/m01-t05/TASK.md) | The configuration file: one project on several chains (criterion 13); carried #11, #27 and #38 | done ([#46](https://github.com/dnznlabs/gw44/pull/46)) |
 | [m01-t06](tasks/m01-t06/TASK.md) | Two-leg security review of what a gateway ships, findings dispositioned (criterion 10); carried #37 | done ([#65](https://github.com/dnznlabs/gw44/pull/65)) |
-| [m01-t07](tasks/m01-t07/TASK.md) | The review's three blocking findings fixed and read again: header amplification, hex above 4 MiB, the no-worker fallback (criterion 10) | not started |
+| [m01-t07](tasks/m01-t07/TASK.md) | The review's three blocking findings fixed and read again: header amplification, hex above 4 MiB, the no-worker fallback (criterion 10) | done ([#75](https://github.com/dnznlabs/gw44/pull/75)) |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.

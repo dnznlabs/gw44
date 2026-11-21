@@ -25,14 +25,12 @@ No new features. Everything here is a property the prototype claims and has not 
 - Any public deployment, domain or DNS: M02.
 - A loader or an edge function for embeds: M03.
 - Quorum or proof verification: M04.
-- A cache: roadmap decision D3.
+- A cache: ruled out, roadmap decision 8.
 - Testing on physical phones and in-app wallet browsers: M02, where there is a public URL to open.
 
 ## Needs from the Product Owner
 
-- Who builds, and when: the handbook's focus project is `rake`, so no task here is assigned or handed off until the Product Owner names an implementer for it.
-- Rulings on [#2](https://github.com/dnznlabs/gw44/issues/2)–[#5](https://github.com/dnznlabs/gw44/issues/5). None gates this milestone.
-- Optional: Firefox's and WebKit's system libraries on the development VM ([m01-t01](tasks/m01-t01/TASK.md), open question 1).
+Nothing open. The engineer is named (focus set to `gw44` on 2026-11-20), the four roadmap decisions are ruled ([#2](https://github.com/dnznlabs/gw44/issues/2)–[#5](https://github.com/dnznlabs/gw44/issues/5)), and Firefox and WebKit launch on the development VM with no install ([#9](https://github.com/dnznlabs/gw44/issues/9)).
 
 ## Phases
 

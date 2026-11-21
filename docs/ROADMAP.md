@@ -9,7 +9,7 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 | Milestone | Goal | Status |
 |:----------|:-----|:-------|
 | [M01 — MVP](milestones/m01/MILESTONE.md) | The prototype hardened into something a stranger can deploy: three browser engines, CI, a reproducible build, a review of record | in progress |
-| M02 — Public deployment | `<contract>.<chain>.<base>` live for the chains rake uses, on static hosting, with the base domain on the Public Suffix List | not started |
+| M02 — Public deployment | `<contract>.<chain>.gw44.link` live for the chains rake uses, on static hosting, with the base domain on the Public Suffix List | not started |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through gw44 | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
 | M05 — Names | A contract is reachable by a name its owner already holds (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`), and from the owner's own domain by a pinned build | not started |
@@ -19,7 +19,7 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 
 ## Order
 
-M01 first because M02 publishes whatever M01 leaves, and a public gateway origin is hard to take back. M03 follows M02 because both of its options need the public base domain. M03's decision is wanted earlier than its work: see Decisions, D1.
+M01 first because M02 publishes whatever M01 leaves, and a public gateway origin is hard to take back. M03 follows M02 because both of its options need the public base domain. M03's mechanism is settled ahead of its work: a loader (Decisions, 6).
 
 M04 comes after the deployment because it is the only milestone that is real engineering rather than hardening, and nothing before it depends on it.
 
@@ -29,28 +29,7 @@ M06 is after production and after M05 (direction given 2026-11-20). It is the fi
 
 ## Decisions
 
-Open. Each is a `decision` issue, linked from its title.
-
-**D1 — How a third-party page loads a contract's script** ([#2](https://github.com/dnznlabs/gw44/issues/2)).
-- *Question.* A static gateway cannot answer another site's `<script src>`; which mechanism does gw44 offer instead?
-- *Options.* (1) A loader: the host page includes one small static gw44 script, pinned by hash, which reads the contract and injects the result. No server; the embed snippet changes shape, and the host's content policy must allow the RPC endpoint. (2) A stateless function at the edge running the same core. The URL keeps the shape rake's snippet has today; the gateway gains a server, though one with no cache and no state. (3) Both.
-- *Recommendation.* The loader. It keeps the property the project exists for, and a host can pin it, which it cannot do with a mutable gateway URL.
-- *Default and deadline.* The loader, built in M03. Blocks M03 only. It also decides the embed snippet rake publishes, so it is worth ruling before rake's mainnet release rather than at M03.
-- *Record.* Here.
-
-**D2 — The name and the base domain** ([#3](https://github.com/dnznlabs/gw44/issues/3)).
-- *Question.* Is `gw44` the name, and which domain is the public base?
-- *Options.* (1) Keep `gw44` and register a domain for it. (2) Rename before M02.
-- *Recommendation.* Decide before M02 starts; after it the name is in URLs other people have published.
-- *Default and deadline.* None, this waits: a public name is a one-way door. M02 cannot start without a domain.
-- *Record.* Here.
-
-**D3 — A client-side cache** ([#4](https://github.com/dnznlabs/gw44/issues/4)).
-- *Question.* Should the worker cache documents at all?
-- *Options.* (1) No cache. Every load is one `eth_call`, measured at 279 ms for a repeat visit; nothing can go stale. (2) A cache keyed by a validator the contract controls, checked before every use. Faster repeat visits by roughly the document's download; a new way to be wrong.
-- *Recommendation.* No cache. The measured repeat visit already matches the hosted gateway's (279 ms against 327 ms). Reopen with a measurement that says otherwise.
-- *Default and deadline.* No cache; nothing waits on it, and the default stands when M01 closes.
-- *Record.* Here.
+Open: none. A new one is a `decision` issue, linked from here.
 
 Closed.
 
@@ -59,6 +38,10 @@ Closed.
 3. **The path form is loopback-only.** On a public host it would put every contract in one origin.
 4. **RPC endpoints are compiled in.** Never taken from a URL, and never fetched at run time.
 5. **An owner's own domain is served by a pinned build** (2026-11-20, [#5](https://github.com/dnznlabs/gw44/issues/5)). The owner hosts the two files on their own domain, built to serve one contract at any hostname; it ships in M05. Pointing an outside domain at the public gateway is M06: a paid on-chain registry, with certificates issued by automation off chain. Rejected for now: certificates on demand with no registry, which makes the operator answerable for any domain anyone points at it.
+
+6. **A third-party page loads a contract's script through a loader** (2026-11-20, [#2](https://github.com/dnznlabs/gw44/issues/2)). The host page includes one small static gw44 script, pinned by hash, which reads the contract and injects the result. Built in M03. It changes the shape of the embed snippet a project such as rake publishes, and the host's content policy must allow the RPC endpoint. Rejected: a stateless function at the edge, which keeps today's snippet and gives the gateway a server.
+7. **The name is `gw44` and the public base domain is `gw44.link`** (2026-11-20, [#3](https://github.com/dnznlabs/gw44/issues/3)). The domain is registered. A one-way door from M02 on, when the name is in URLs other people publish.
+8. **No client-side cache** (2026-11-20, [#4](https://github.com/dnznlabs/gw44/issues/4)). Every load is one `eth_call`, measured at 279 ms for a repeat visit against the hosted gateway's 327 ms. A cache keyed by a validator the contract controls may be taken up after production, as work of its own, and only with a measurement that argues for it and tests that show it cannot serve a stale document.
 
 ## Findings carried forward
 

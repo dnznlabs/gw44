@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { type Pins, parsePin, parsePins } from "../src/core/target.ts";
+import { readChains } from "./chains.ts";
 import { inlineBoot } from "./inline.ts";
 
 const out = process.env["GW44_OUT"] ?? "dist";
@@ -23,7 +24,9 @@ function listing(pins: Pins): string {
 const EXPECTED = ["404.html", "gw44-sw.js", "index.html"];
 /** The worker is code every visitor of every contract executes, so its size is a gate, not a note. */
 const SW_LIMIT = 16_384;
-const chains = JSON.parse(await readFile(process.env["GW44_CHAINS"] ?? "chains.json", "utf8")) as unknown;
+/* Validated here rather than trusted: these endpoints are compiled into the worker, so a bad one
+   is not a build-time inconvenience but a URL every visitor's browser then talks to (#63). */
+const chains = await readChains(process.env["GW44_CHAINS"] ?? "chains.json", (p) => readFile(p, "utf8"));
 
 /* The contracts are compiled in, like the endpoints: the bytes a visitor runs are the whole of what
    decides what is served. An unpinned build defines them as null and keeps every chain. */
@@ -43,14 +46,13 @@ if (raw !== "" && configPath !== "") {
   throw new Error("GW44_PIN and GW44_CONFIG both set; a build serves one configuration, so pick one");
 }
 let pins: Pins | null = null;
-let endpoints = chains;
+let endpoints: Readonly<Record<string, readonly string[]>> = chains;
 if (raw !== "" || configPath !== "") {
   pins =
     configPath === "" ? parsePin(raw) : parsePins(JSON.parse(await readFile(configPath, "utf8")) as unknown);
-  const all = chains as Record<string, unknown>;
-  const only: Record<string, unknown> = {};
+  const only: Record<string, readonly string[]> = {};
   for (const chain of Object.keys(pins.contracts)) {
-    const endpointsFor = all[chain];
+    const endpointsFor = chains[chain];
     if (endpointsFor === undefined) {
       const where = configPath === "" ? `pin ${raw}` : configPath;
       throw new Error(`${where} names chain ${chain}, which the chains file does not carry`);

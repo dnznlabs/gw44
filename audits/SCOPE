@@ -17,6 +17,7 @@ src/adapters/sw/fallback.ts
 src/adapters/sw/shell.html
 src/adapters/sw/sw.ts
 tools/build.ts
+tools/chains.ts
 tools/inline.ts
 
 # ---- excluded, each with its reason -------------------------------------------------------------

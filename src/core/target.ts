@@ -37,6 +37,12 @@ export interface Pins {
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 const CHAIN = /^[1-9][0-9]{0,15}$/;
 
+/** A decimal chain id: no leading zeros, no sign, no separators. The URL form's rule, exported so
+ *  the chains file is checked against the same one rather than a second copy of it. */
+export function isChainId(value: string): boolean {
+  return CHAIN.test(value);
+}
+
 /** Loopback only: `localhost`, any `*.localhost`, 127.0.0.0/8 and `[::1]`. */
 export function isLoopback(hostname: string): boolean {
   return (

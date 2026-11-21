@@ -12,7 +12,8 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 | M02 — Public deployment | `<contract>.<chain>.<base>` live for the chains rake uses, on static hosting, with the base domain on the Public Suffix List | not started |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through gw44 | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
-| M05 — Names and custom domains | A contract is reachable by name (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`) and from its owner's own domain | not started |
+| M05 — Names | A contract is reachable by a name its owner already holds (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`), and from the owner's own domain by a pinned build | not started |
+| M06 — Registry | A paid on-chain registry gives a contract a short name (`<name>.<base>`) or an outside domain, with certificates for registered domains issued by automation off chain, and payment through Dues | not started |
 
 `MILESTONE.md` for M02–M04 is written when the milestone before it is under way. The MVP is M01; M02 is what makes it usable in public.
 
@@ -23,6 +24,8 @@ M01 first because M02 publishes whatever M01 leaves, and a public gateway origin
 M04 comes after the deployment because it is the only milestone that is real engineering rather than hardening, and nothing before it depends on it.
 
 M05 is last and lower priority, scoped for after the public deployment (direction given 2026-11-20). It follows M04 because a name adds a second lookup to the same endpoints, and it is better added to endpoints that are already checked. Its scoping has three questions to answer before any task is written, listed under Findings carried forward.
+
+M06 is after production and after M05 (direction given 2026-11-20). It is the first milestone with a contract, a fee and a job that runs off chain, so it is scoped as its own piece of work with its own review, and nothing before it depends on it. It follows M05 because the name forms there need no contract and settle how a named origin resolves, which the registry then reuses.
 
 ## Decisions
 
@@ -54,7 +57,7 @@ Open. Each is a `decision` issue, linked from its title.
 - *Options.* (1) A pinned build: the owner hosts the two files on their own domain, built to serve one contract at any hostname. No server, no dependence on the public gateway; the owner does a deploy rather than a DNS edit. (2) CNAME to the public gateway, with certificates issued on demand by the host. A DNS edit for the owner; a hosting service or a server for the operator, and a DNS lookup in the browser to learn which contract the hostname means. (3) Both.
 - *Recommendation.* The pinned build first: it is the only route that keeps the gateway static, and it removes the operator from the owner's trust. CNAME if a host with on-demand certificates is chosen in M02 anyway.
 - *Default and deadline.* The pinned build, in M05. Blocks M05 only, though the choice of host in M02 decides whether option 2 stays cheap.
-- *Direction, 2026-11-20.* Option 2 is a future idea and not M05 work: its shape would be a paid on-chain registry mapping a domain to a contract, with a certificate issued per registered domain. Names under the gateway's own base stay in M05. Whether the pinned build ships in M05 is not ruled; the default stands.
+- *Direction, 2026-11-20.* Option 2 is not M05 work. It is M06: a paid on-chain registry, with certificates for registered domains issued by automation off chain. Whether the pinned build ships in M05 is not ruled; the default stands.
 - *Record.* Here.
 
 Closed.
@@ -73,9 +76,20 @@ For M05's scoping. None is measured; each is a question, not a design.
 - **A wildcard certificate covers one label.** `<name>.ens.<base>` works for `name.eth`; a subname (`a.b.eth`) needs either an encoding into one label or no support.
 - **A name's origin follows the name, not the contract.** Whoever holds the name can repoint it, and the origin's storage and granted permissions go with it. Same as DNS, and worth saying in `SECURITY.md` when it ships.
 
+For M06's scoping. A direction, not a design; none of it is measured. The discussion is on [#5](https://github.com/dnznlabs/gw44/issues/5).
+
+- **What the registry holds.** A name or a domain, mapped to a chain id and a contract address, with an owner who can repoint it. Storing the chain answers the question a `.wei` or ENS name leaves open.
+- **Short names need no certificate; outside domains do.** `<name>.<base>` is one label under the base's wildcard. A registered outside domain needs a certificate of its own.
+- **Certificate automation stays out of the serving path.** A job reads the registry, obtains and renews a certificate per registered domain and installs it on the static host. A page load still touches only the static host and the RPC endpoint. If the job stops, existing sites keep loading; new domains wait and renewals eventually lapse.
+- **It constrains M02's host.** Hostnames and certificates must be addable by API, and the host's limit on hostnames per deployment is the ceiling on registered domains. To be checked when M02's options are laid out.
+- **Payment through Dues.** A registration is a subscription to a Dues plan, and the registry reads whether the holder is paid up. 0.005 ETH was the example price. What happens to a name whose payment lapses (a grace period, release, who may take it next) is a decision.
+- **Reserved labels.** `ens`, `wei`, `gwei`, `www`, anything numeric and anything starting `0x` cannot be registered, or a name could shadow a gateway form.
+- **Abuse lands on the base domain.** A lookalike name serving a phishing document can get the whole base flagged. A fee slows that and does not stop it; the base on the Public Suffix List (M02) limits the damage to one name. The registry needs a way to take a name down, and who holds it is a decision.
+- **A second call per page load.** A named origin resolves the name before it can ask for `html()`.
+- **One-way doors.** The registry's deployment, and the first name sold: after that, changing the rules changes them for someone who paid.
+
 ## Not on the roadmap
 
-- **Outside domains pointed at the public gateway.** A future idea, as a paid on-chain registry with issued certificates ([#5](https://github.com/dnznlabs/gw44/issues/5)). It needs a host or service that issues certificates on demand, which is a property to weigh when M02 picks a host.
 - **IPFS and the other `web3://` resolve modes.** Out by the project's definition.
 - **A server-side cache of any kind.** It is the failure this project exists to remove.
 - **Chain aliases** (`sep`, `basesep`). A second name for the same origin is a second origin; the chain id is the name.

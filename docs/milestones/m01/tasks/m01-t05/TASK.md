@@ -32,7 +32,9 @@ Measured at scoping, 2026-11-20, on `main` at `45022ac`:
 3. **Redirect status.** Add `redirectStatus?: 302 | 308` to `Target`. The redirect from `/` to the default is 302, because the default is a setting that can change; the trailing-slash redirects stay 308. `sw.ts` uses the field, defaulting to 308. `boot.ts`, straight after its `targetOf` check, does `location.replace(target.redirect)` when a redirect is set, so a first visit to `/` moves before a worker is registered and the no-worker fallback never renders the wrong path.
 4. **The build.** `tools/build.ts` reads `GW44_CONFIG` (a path). Set together with `GW44_PIN` it fails. It parses the file with `parsePins`, fails if any configured chain is missing from the chains file, defines `__GW44_PINS__` (renamed from `__GW44_PIN__`; `null` in an unpinned build) and compiles in the endpoints of the configured chains only. The first output line lists every `chain:address` and the default. In `mk/10-gateway.mk`, `CONFIG ?=` exported as `GW44_CONFIG`, named in the `build` target's help.
    - Check: a one-contract file and `PIN=<the same chain>:<the same address>` print the same three hashes. A two-contract file builds; a file naming a chain absent from `chains.json` and one with both `CONFIG` and `PIN` set each exit non-zero with a message that says why.
-   - Stop and report if the unpinned `gw44-sw.js` grows by more than 300 bytes or any worker exceeds 12,000.
+   - **One switch the bundler can fold** (added 2026-11-20, after the stop below was met). A second define, `__GW44_PINNED__`, `true` or `false`. `targetOf` in `src/adapters/sw/config.ts` chooses between `parseTarget` and `pinnedTarget` on that constant and on nothing else, so each bundle carries only the parser it uses. As first built, steps 1 to 3 grew the unpinned worker by 570 bytes (engineer's figure, 8,137 against 7,567), because `targetOf` read an exported constant and both parsers stayed in every bundle. Measured by the architect on `main` at `e662bfd`, single-pin code with this switch: unpinned worker 7,403 (164 smaller), pinned 6,464 (706 smaller), `grep -c localhost` 0 in the pinned worker and 1 in the unpinned one. A comparison of the pins object with `null` folds in one direction only; the boolean folds in both.
+   - Check: `grep -c localhost` on `gw44-sw.js` is 0 for the one-contract build and for the two-chain build, and 1 for the unpinned build; the three figures and the three workers' sizes in `HANDOFF.md`.
+   - Stop and report if, with the switch in place, the unpinned `gw44-sw.js` grows by more than 300 bytes or any worker exceeds 12,000.
 5. **`tools/get.ts`** honours `GW44_CONFIG` as it honours `GW44_PIN`, and prints a redirect as its status and `location` rather than following it.
 6. **Browser test, three engines.** New `test/e2e/multi.e2e.ts`. Two fake chains, `31337` and `31338`, each its own JSON-RPC stub on its own port, each recording the `to` of every call; the first serves `ADDRESS` with a document titled `A`, the second serves a different address with one titled `B`, each with a relative `widget.js`. One build from a two-contract file with `31337` the default. Cases:
    - `/` ends on `/31337/` showing `A`, and its widget ran.
@@ -60,6 +62,7 @@ Measured at scoping, 2026-11-20, on `main` at `45022ac`:
 - The worker of a two-chain build holds the endpoints of those two chains only: shown by a `grep` for an unconfigured chain's endpoint in `HANDOFF.md`.
 - Milestone criteria 5 and 6 for a multi-chain build: step 8 passes in CI, the output is the three files, the worker is within the limit.
 - Everything that passed at `45022ac` still passes: `devbox run -- make check`, and `make verify`'s existing eight comparisons and four browser loads.
+- A configured build's worker does not contain the unpinned URL parser, and the unpinned worker does not contain the configured one: step 4's `grep` figures.
 - #11, #27 and #38 are each closed by what steps 9 to 11 name.
 
 ## Out of scope
@@ -70,7 +73,7 @@ Measured at scoping, 2026-11-20, on `main` at `45022ac`:
 - Endpoints in the configuration file. They stay in the chains file (`GW44_CHAINS`).
 - YAML. JSON needs no dependency.
 - Any deployment, workflow for GitHub Pages, or `docs/DEPLOY.md`: M02.
-- #36 for a one-contract build, and #37: the review of m01-t06 takes #37, M02 takes #36.
+- #36 for a one-contract build: M02 takes it. #37 stays open: step 4 takes the unused parser out of each bundle, and the review of m01-t06 still reads `targetOf` and writes what `SECURITY.md` says.
 - The unpinned URL forms and `src/core/resolve.ts`, `src/core/abi.ts`.
 
 ## Open questions

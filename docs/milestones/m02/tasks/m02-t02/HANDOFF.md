@@ -10,6 +10,21 @@ PR: #89 · Branch: `m02/t02-reusable` · 2026-11-21 · amended at review
 
 **Step 4 is not in this PR.** A `workflow_call` workflow can only be called once it is on the default branch, so the deploy, the embed case in three engines and the redeploy measurement follow the merge, as m02-t01 did it: a comment on this PR and a Markdown-only amendment here. Three deploy runs, and the stop condition is a returning visitor still on the old default fifteen minutes after a deploy.
 
+## Step 4, on the real host — amended 2026-11-21
+
+Markdown only, as the plan has it. Three deploy runs, all through `pages-test.yml` calling the reusable workflow from `main`.
+
+| What | Result |
+|:--|:--|
+| The deploy itself | [44943691478](https://github.com/dnznlabs/gw44/actions/runs/44943691478) at `a0f6f09`. It published the embed copies the site had never had: `/84532/widget.js` and `/11155111/widget.js`, 8,509 B each, `integrity` `sha384-YdiQK1VL…FQVtE` — the value `embeds.sh` printed in the run, the one recorded above, and the one computed again locally |
+| `make check-site` in three engines | every case passed on chromium, firefox and webkit, against the live site, twice over — once on the two-chain build and once on the `84532`-default one |
+| Milestone criterion 4, the cross-origin embed | pass in three engines: a page on `127.0.0.1` runs `/84532/widget.js` under the printed `integrity` and is **refused** when one character of the hash is changed |
+| The same URL on a controlled page | answered by the **worker**, not the host, in three engines: `cache-control: no-store` with no `etag`, against the host's `max-age=600` with one, with a workers-blocked control. So the plan's "assert it in Chromium only" fallback was not needed |
+| **A redeploy reaching a returning visitor** | **the stop condition fired.** Eleven plain navigations over ten and a half minutes after the `84532` deploy, and **fourteen across sixteen minutes** after the restoring deploy, every one on the old default. One `registration.update()` propagated it in about a second, twice. The full reading is on [#85](https://github.com/dnznlabs/gw44/issues/85); the cause is that navigating does not trigger the browser's update check, not the CDN and not the worker |
+| Deploy runs spent | three, as the plan allows: the two-chain deploy, the `84532`-default deploy, and the restore. The site is back on the two-chain build, `gw44-sw.js` 7,778 B and `/` 9,260 B |
+
+**What the deploys cost on the way, and what came out of it.** Of seven runs through this workflow that day, **four failed at `actions/deploy-pages` with `Found 0 artifact(s)`** moments after a successful upload, and three deployed. The first fix waited for the artifact to be listable ([#105](https://github.com/dnznlabs/gw44/pull/105)); the run after it showed the wait passing and the action failing anyway, which proved the two lookups are different views and not a race. The workflow now makes three attempts in one job and names the one that deployed ([#111](https://github.com/dnznlabs/gw44/pull/111)); both deploys since took the first attempt, so the later two are still unexercised. A caller needs `actions: read` from `3ee50fe` onwards, which `docs/DEPLOY.md` now states.
+
 ## Acceptance criteria
 
 | AC | Result | Evidence |

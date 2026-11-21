@@ -12,6 +12,14 @@ name: pages-test
 
 on:
   workflow_dispatch:
+    inputs:
+      config:
+        description: The configuration to deploy. The second one differs only in which chain `/` goes to, which is what m02-t02 step 4's redeploy measurement needs; it changes the worker's bytes and nothing else.
+        type: choice
+        default: test/fixtures/gw44.two-chains.json
+        options:
+          - test/fixtures/gw44.two-chains.json
+          - test/fixtures/gw44.84532-default.json
 
 permissions:
   contents: read
@@ -26,7 +34,9 @@ jobs:
     uses: ./.github/workflows/deploy-pages.yml
     with:
       gw44-ref: ${{ github.sha }}
-      config: test/fixtures/gw44.two-chains.json
+      # A choice of two committed fixtures rather than free text: what a deploy serves is a decision,
+      # and a path typed into a dispatch box is one nobody reviewed.
+      config: ${{ inputs.config }}
       chains: chains.json
       embeds: widget.js
     secrets:

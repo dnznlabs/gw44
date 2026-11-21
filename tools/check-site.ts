@@ -1,5 +1,14 @@
 // Checks a *deployed* gateway in a real browser, over HTTPS, from a real host.
-//   node tools/check-site.ts <base URL> <chains config>      GW44_ENGINE=chromium|firefox|webkit
+//   node tools/check-site.ts <base URL> <chains config> [<chain>/<file>=sha384-…]
+//   GW44_ENGINE=chromium|firefox|webkit
+//
+// The third argument is one embedded resource and the `integrity` value `tools/embeds.sh` printed
+// for it at deploy time. Given it, two more cases run: a page on another origin embeds that URL by
+// `<script src>` and must be refused when a character of the hash is changed, and the same URL
+// fetched by the site's own controlled document must be answered by the service worker rather than
+// by the host. Without it those two are reported as skipped, because the value has to come from the
+// build and not from the bytes being checked — a check that hashes what it is checking proves only
+// that sha384 is deterministic.
 //
 // Everything else in this repository tests the gateway against `tools/serve.ts` on loopback. This
 // is the first instrument that exercises a build the way a visitor meets it: a static host nobody
@@ -11,6 +20,8 @@
 //
 // Typechecked by tsconfig.e2e.json, so `page.evaluate` and the DOM library are available here and
 // tsconfig.json excludes this file.
+import { type Server, createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { readFile } from "node:fs/promises";
 import { type Browser, type BrowserContext, chromium, firefox, webkit } from "playwright-core";
 import { parsePins } from "../src/core/target.ts";
@@ -18,12 +29,25 @@ import { parsePins } from "../src/core/target.ts";
 const ENGINE_TYPES = { chromium, firefox, webkit } as const;
 type EngineName = keyof typeof ENGINE_TYPES;
 
-const [baseRaw, configPath] = process.argv.slice(2);
+const [baseRaw, configPath, embedRaw] = process.argv.slice(2);
 if (baseRaw === undefined || configPath === undefined) {
-  console.error("usage: node tools/check-site.ts <base URL> <chains config>");
+  console.error("usage: node tools/check-site.ts <base URL> <chains config> [<chain>/<file>=sha384-…]");
   process.exit(2);
 }
 const base = baseRaw.replace(/\/$/, "");
+
+/** `<chain>/<file>=sha384-…`, as `tools/embeds.sh` prints the pair. */
+let embed: { path: string; integrity: string } | undefined;
+if (embedRaw !== undefined) {
+  const at = embedRaw.indexOf("=");
+  const path = at === -1 ? "" : embedRaw.slice(0, at);
+  const integrity = at === -1 ? "" : embedRaw.slice(at + 1);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path) || !integrity.startsWith("sha384-")) {
+    console.error(`the embed argument must be <chain>/<file>=sha384-…; got ${JSON.stringify(embedRaw)}`);
+    process.exit(2);
+  }
+  embed = { path, integrity };
+}
 
 const engineName = process.env["GW44_ENGINE"] ?? "chromium";
 if (!Object.hasOwn(ENGINE_TYPES, engineName)) {
@@ -71,7 +95,43 @@ async function documentShown(page: import("playwright-core").Page): Promise<{ ok
   return { ok: title !== "" && title !== SHELL, title };
 }
 
+/* The other origin, for case 8. A page that embeds one URL with one `integrity` value and reports
+   which of the two events the browser gave the script element. `src` and `integrity` arrive as query
+   parameters and are written into attributes, so both are quoted with a character neither can
+   contain: the URL comes from this script's own arguments, and an embed page that needed escaping
+   would be a check with a bug in it rather than a finding. */
+let embedServer: Server | undefined;
+let embedPort = 0;
+function embedPageUrl(src: string, integrity: string): string {
+  const q = new URLSearchParams({ src, integrity });
+  return `http://127.0.0.1:${embedPort}/?${q.toString()}`;
+}
+
+async function startEmbedServer(): Promise<void> {
+  embedServer = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const src = (url.searchParams.get("src") ?? "").replaceAll('"', "");
+    const integrity = (url.searchParams.get("integrity") ?? "").replaceAll('"', "");
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(
+      `<!doctype html><title>embed</title><script>
+         window.gw44Embed = undefined;
+         function gw44Done(what) { window.gw44Embed = what; window.dispatchEvent(new Event("gw44-embed")); }
+       </script>
+       <script src="${src}" integrity="${integrity}" crossorigin="anonymous"
+               onload="gw44Done('load')" onerror="gw44Done('error')"></script>`,
+    );
+  });
+  await new Promise<void>((done) =>
+    embedServer?.listen(0, "127.0.0.1", () => {
+      embedPort = (embedServer?.address() as AddressInfo).port;
+      done();
+    }),
+  );
+}
+
 async function main(): Promise<void> {
+  if (embed !== undefined) await startEmbedServer();
   browser = await engine.launch();
 
   // 1 — the root reaches the default chain's prefix and the application replaces the shell.
@@ -203,6 +263,98 @@ async function main(): Promise<void> {
     await context.close();
   }
 
+  /* 8 — milestone criterion 4: a page on another origin embeds the published copy, pinned by the
+     `integrity` the deploy printed. Served from 127.0.0.1 while the site is on its own hostname, so
+     this is a real cross-origin embed and needs the host's CORS as well as the hash to match.
+
+     The signal is the script element's own `load` or `error` event, not anything the script does:
+     what is being checked is whether the browser ran it, and the embedded resource belongs to the
+     project rather than to this check. The tampered case changes one character of the hash, so the
+     bytes, the URL and the CORS headers are all identical between the two halves and the hash is
+     the only difference. */
+  if (embed !== undefined) {
+    const context = await fresh();
+    const page = await context.newPage();
+    const url = `${base}/${embed.path}`;
+    // One character of the base64, flipped to a different one, so the value stays well-formed.
+    const last = embed.integrity.slice(-1);
+    const tampered = embed.integrity.slice(0, -1) + (last === "A" ? "B" : "A");
+
+    const results: string[] = [];
+    for (const integrity of [embed.integrity, tampered]) {
+      await page.goto(embedPageUrl(url, integrity));
+      const got: string = await page.evaluate(
+        () =>
+          new Promise<string>((done) => {
+            const w = window as unknown as { gw44Embed?: string };
+            if (w.gw44Embed !== undefined) return done(w.gw44Embed);
+            window.addEventListener("gw44-embed", () => done(w.gw44Embed ?? "none"), { once: true });
+          }),
+      );
+      results.push(got);
+    }
+    const [printed, changed] = results;
+
+    report(
+      `a second origin runs ${embed.path} with the printed integrity and is refused when it is changed`,
+      printed === "load" && changed === "error",
+      `printed ${printed}, one character changed ${changed}`,
+    );
+    await context.close();
+  } else {
+    console.log(`  ${engineName} the cross-origin embed case: skipped, no <chain>/<file>=sha384-… given`);
+  }
+
+  /* 9 — the same URL asked for by the site's own document, which the service worker must answer from
+     the chain rather than letting the host serve its static copy.
+
+     Case 6 records that three instruments for "came from the service worker" do not discriminate on
+     a deployed site. This one does, and it is the response's own headers: the gateway's core puts
+     `cache-control: no-store` on every response it builds and never an `etag`, while the host serves
+     a file with `cache-control: max-age=600` and an `etag`. The control is the same fetch with
+     service workers blocked, so both halves ask for one URL and differ only in who answered. */
+  if (embed !== undefined) {
+    const path = `/${embed.path}`;
+    interface Answered {
+      status: number;
+      cache: string;
+      etag: string;
+      controlled: boolean;
+    }
+    const read = async (options: Parameters<Browser["newContext"]>[0]): Promise<Answered> => {
+      const context = await fresh(options);
+      const page = await context.newPage();
+      await page.goto(`${base}/`);
+      await documentShown(page);
+      const seen: Answered = await page.evaluate(async (p) => {
+        const res = await fetch(p, { cache: "no-store" });
+        return {
+          status: res.status,
+          cache: res.headers.get("cache-control") ?? "none",
+          etag: res.headers.get("etag") === null ? "none" : "present",
+          controlled: navigator.serviceWorker?.controller !== null,
+        };
+      }, path);
+      await context.close();
+      return seen;
+    };
+
+    const worker = await read({});
+    const host = await read({ serviceWorkers: "block" });
+
+    report(
+      `${embed.path} on a controlled page is answered by the worker, not by the host`,
+      worker.status === 200 &&
+        worker.controlled &&
+        worker.cache === "no-store" &&
+        worker.etag === "none" &&
+        host.cache !== "no-store" &&
+        host.etag === "present",
+      `worker: ${worker.status} cache-control ${worker.cache}, etag ${worker.etag}, controlled ${worker.controlled}` +
+        ` | host control: ${host.status} cache-control ${host.cache}, etag ${host.etag}`,
+    );
+  }
+
   await browser.close();
   browser = undefined;
 }
@@ -213,8 +365,10 @@ try {
 } catch (error) {
   console.error(`check-site: ${engineName} threw ${(error as Error).message.split("\n")[0]}`);
   await browser?.close();
+  embedServer?.close();
   process.exit(1);
 }
+embedServer?.close();
 if (failed > 0) {
   console.error(`check-site: ${failed} case(s) failed on ${engineName}`);
   process.exit(1);

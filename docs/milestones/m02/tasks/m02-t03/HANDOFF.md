@@ -1,6 +1,6 @@
 # m02-t03 — handoff
 
-PR: #TBD · Branch: `m02/t03-deploy-guide` · 2026-11-21
+PR: #112 · Branch: `m02/t03-deploy-guide` · 2026-11-21
 
 [`docs/DEPLOY.md`](../../../../DEPLOY.md) takes the owner of a project from nothing to a gateway on their own domain: ten sections, each a command or a setting and then the reading that shows it worked. **Two fresh sessions with no context followed it**, one before the fixes and one after, and both reports are committed beside this file unedited — [`reader-1.md`](reader-1.md) and [`reader-2.md`](reader-2.md). Between them they found one thing wrong, six imprecise or missing, and one defect in `tools/verify.sh` that is not the guide's (#110). `README.md` links the guide from § Documentation and from the pinned-build section. Markdown only: nothing outside `docs/` and `README.md` changed.
 

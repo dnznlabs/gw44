@@ -29,7 +29,9 @@ M06 is after production and after M05 (direction given 2026-11-20). It is the fi
 
 ## Decisions
 
-Open: none. A new one is a `decision` issue, linked from here.
+Open. Each is a `decision` issue, linked from its title.
+
+**The public host form: one label or two** ([#33](https://github.com/dnznlabs/gw44/issues/33)). `<contract>.<chain>.gw44.link` as built, or `<contract>-<chain>.gw44.link`. Recommended: one label. No default, since the public URL shape is a one-way door at M02; nothing in M01 waits on it.
 
 Closed.
 
@@ -44,6 +46,12 @@ Closed.
 8. **No client-side cache** (2026-11-20, [#4](https://github.com/dnznlabs/gw44/issues/4)). Every load is one `eth_call`, measured at 279 ms for a repeat visit against the hosted gateway's 327 ms. A cache keyed by a validator the contract controls may be taken up after production, as work of its own, and only with a measurement that argues for it and tests that show it cannot serve a stale document.
 
 ## Findings carried forward
+
+For M02's scoping. From the hosts' documentation, read 2026-11-20; nothing here has been deployed.
+
+- **The host must serve a wildcard hostname.** GitHub Pages takes named subdomains and an apex only, and Cloudflare Pages lists wildcard custom domains as not possible. CloudFront takes wildcard alternate names, each covered by a name on the one certificate a distribution holds. A pinned build has no such need and runs on any of them.
+- **Two labels cost a certificate name per chain.** A wildcard certificate name covers one label, so `<contract>.<chain>.<base>` needs `*.<chain>.<base>` on the certificate for every chain served. One label needs `*.<base>` once. This is decision #33.
+- **`docs/DEPLOY.md` is written here**, by making the deployment, with the unknown-path rule and the wildcard DNS and certificate; moved from M01's criterion 11.
 
 For M05's scoping. None is measured; each is a question, not a design.
 

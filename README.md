@@ -1,10 +1,18 @@
 # DNZN // GW44
 
-A web gateway for contracts that serve their own front end: `/` is the contract's [ERC-8244](https://eip.tools/eip/8244) `html()`, every other path is its [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) `request()`.
+A web gateway built specifically for contract-hosted, on-chain dapps: front ends a contract serves itself through [ERC-8244](https://eip.tools/eip/8244) `html()` and [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) `request()`.
 
 by **Denizen.** // dxnzn.wei
 
 The gateway is two static files. A page shell installs a service worker, and from then on the worker answers every request on the origin by calling the contract from the visitor's browser, straight to a public RPC endpoint. There is no gateway server, so there is nothing between the chain and the reader that can hold a stale copy: nothing is cached, and a document the owner changes is what the next reload shows. Each contract gets its own origin, `<contract>.<chain>.<base>`, so one contract's document cannot touch another's.
+
+## Motivation
+
+Gateways are where decentralization breaks down for on-chain dapps. The whole point of ERC-8244 is that the code lives on-chain, with no backend. But a browser cannot read a chain, so the page arrives through a gateway, and a hosted gateway is a backend again: a server between the user and the contract that has to be trusted.
+
+gw44 complements ERC-8244 and ERC-5219 by stripping the gateway down to two static files, about 16 KB in total, that can be self-hosted or distributed globally through a CDN.
+
+No backends. Minimal trust boundaries between the user and the on-chain dapp.
 
 ## Release Info
 

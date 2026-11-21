@@ -58,7 +58,9 @@ The MVP: the spike's prototype hardened, tested in three browser engines and rev
 
 **`https://gw-test.dnzn.dev`** serves a two-chain build of the rake fixture — the same contract on Sepolia (`11155111`, the default) and Base Sepolia (`84532`), from [`test/fixtures/gw44.two-chains.json`](test/fixtures/gw44.two-chains.json). So `/` redirects to `/11155111/`, `/84532/` serves that chain's document, and any other first path segment is a 404 with no chain call.
 
-It exists to be checked, not to be depended on: it is a testnet fixture on a hostname that may be rebuilt or repointed without notice, and it is deployed by a workflow somebody runs by hand ([`.github/workflows/pages-test.yml`](.github/workflows/pages-test.yml)), never on a push. `make check-site URL=https://gw-test.dnzn.dev` checks a deployed gateway in a browser, and `VERIFY_SITE=https://gw-test.dnzn.dev make verify` compares the bytes it serves with what the chain returns.
+It also carries a static copy of each chain's `widget.js`, at `/<chain id>/widget.js`, for host pages that embed the widget with a `<script src>` — a service worker can only answer pages on its own origin, so an embed needs a real file. Each copy is written only after the bytes have been read twice, through the gateway's core and through `cast`, and the deploy prints the `integrity` snippet that pins it.
+
+It exists to be checked, not to be depended on: it is a testnet fixture on a hostname that may be rebuilt or repointed without notice, and it is deployed by a workflow somebody runs by hand, never on a push. That workflow ([`.github/workflows/pages-test.yml`](.github/workflows/pages-test.yml)) is itself only a caller of the reusable [`deploy-pages.yml`](.github/workflows/deploy-pages.yml) — the same workflow any project calls to deploy its own gateway from its own repository — so the path a project takes is the path this site is built by. `make check-site URL=https://gw-test.dnzn.dev` checks a deployed gateway in a browser, and `VERIFY_SITE=https://gw-test.dnzn.dev make verify` compares the bytes it serves with what the chain returns.
 
 Alpha software is alpha, act accordingly. See [Disclaimer](#disclaimer).
 

@@ -28,6 +28,8 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 
 `make check-site URL=<base url> [ENGINES="…"]` checks a **deployed** gateway in a browser, once per engine, and `VERIFY_SITE=<base url> make verify` adds a pass comparing the bytes that site serves with what the chain returns. Both need a site somebody deployed, so neither is reachable from `make check` or the workflow. The test site is `https://gw-test.dnzn.dev`, deployed by hand with the `pages-test` workflow from `main`.
 
+`tools/embeds.sh <site dir>` publishes the static copies a host page embeds, after `tools/build.ts` has written and checked its own three files. It reads each resource **twice** — through `tools/get.ts` under the configuration, and through `cast` cut apart by hand as `tools/verify.sh` does — and refuses to write a copy unless both agree byte for byte and the chain answered 200. It takes `GW44_CONFIG`, `GW44_CHAINS`, `GW44_EMBEDS` (space-separated paths) and optionally `GW44_SITE_URL` for the snippet's host, refuses a path that is not plain and relative, and refuses to overwrite one of the three built files. The reusable `deploy-pages.yml` runs it; nothing else does.
+
 **None of `make verify`, `make audit` or `make check-site` is part of `make check`, and that is deliberate.** For verify, CI is offline. It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
 
 ## Conventions

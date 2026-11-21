@@ -17,7 +17,9 @@ async function handle(url: URL): Promise<Response> {
   try {
     const target = targetOf(url);
     if (target === null) return fetch(url);
-    if (target.redirect !== undefined) return Response.redirect(new URL(target.redirect, url), 308);
+    if (target.redirect !== undefined) {
+      return Response.redirect(new URL(target.redirect, url), target.redirectStatus ?? 308);
+    }
     return toResponse(await resolve(target, rpc));
   } catch (error) {
     return toResponse(errorResponse(error));

@@ -3,10 +3,11 @@
 //   node tools/get.ts http://localhost:8244/11155111/0x…/widget.js
 //   node tools/get.ts https://0x….11155111.gw44.io/
 //   GW44_PIN=<chain>:<address> node tools/get.ts https://any.host/  resolve as a pinned build does
+//   GW44_CONFIG=gw44.json node tools/get.ts https://any.host/<chain>/   …as a configured build does
 import { readFile } from "node:fs/promises";
 import { createFetchRpc, type Chains } from "../src/adapters/rpc/fetch.ts";
 import { errorResponse, resolve } from "../src/core/resolve.ts";
-import { parsePin, parseTarget, pinnedTarget } from "../src/core/target.ts";
+import { parsePin, parsePins, parseTarget, pinnedTarget } from "../src/core/target.ts";
 
 const arg = process.argv[2];
 if (arg === undefined) {
@@ -18,13 +19,32 @@ const started = performance.now();
 let res;
 try {
   /* The same decision a pinned build compiles in, so the pinned path can be compared with the
-     chain without a browser. The pin is read here and not from the build's output on purpose. */
+     chain without a browser. The configuration is read here and not from a build's output. */
   const raw = process.env["GW44_PIN"] ?? "";
+  const configPath = process.env["GW44_CONFIG"] ?? "";
+  if (raw !== "" && configPath !== "") {
+    console.error("gw44: GW44_PIN and GW44_CONFIG both set; pick one");
+    process.exit(2);
+  }
   const url = new URL(arg);
-  const target = raw === "" ? parseTarget(url) : pinnedTarget(url, parsePin(raw));
+  const pins =
+    configPath !== ""
+      ? parsePins(JSON.parse(await readFile(configPath, "utf8")) as unknown)
+      : raw !== ""
+        ? parsePin(raw)
+        : null;
+  const target = pins === null ? parseTarget(url) : pinnedTarget(url, pins);
   if (target === null) {
     console.error("gw44: no contract in this URL");
     process.exit(2);
+  }
+  /* Reported, not followed: what a caller comparing bytes with the chain needs to know is that this
+     URL redirects and to where, and following it would hide a redirect loop rather than show it. */
+  if (target.redirect !== undefined) {
+    const status = target.redirectStatus ?? 308;
+    console.error(`${status} 0 B 0 ms`);
+    console.error(`location: ${target.redirect}`);
+    process.exit(0);
   }
   res = await resolve(target, createFetchRpc(chains));
 } catch (error) {

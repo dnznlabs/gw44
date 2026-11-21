@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GatewayError } from "../src/core/errors.ts";
-import { parsePin, parseTarget, pinnedTarget } from "../src/core/target.ts";
+import { parsePin, parsePins, parseTarget, pinnedTarget } from "../src/core/target.ts";
 import { ADDRESS } from "./helpers.ts";
 
 const parse = (url: string) => parseTarget(new URL(url));
@@ -131,7 +131,116 @@ test("a malformed pin is rejected rather than guessed at", () => {
 
 test("a pin's address is accepted in mixed case and carried lower-case", () => {
   assert.deepEqual(parsePin(`11155111:${ADDRESS.toUpperCase().replace("0X", "0x")}`), {
-    chain: "11155111",
-    address: ADDRESS,
+    default: "11155111",
+    contracts: { "11155111": ADDRESS },
   });
+});
+
+// --- the configuration file: one project, one contract per chain ---
+
+const B = "0x00b19609f2349d4160d2babaf46b0cd1ec6d7f8e";
+const TWO = parsePins({ default: "1", contracts: { "1": ADDRESS, "8453": B } });
+const two = (url: string) => pinnedTarget(new URL(url), TWO);
+
+test("a one-contract configuration needs no default and behaves as a pin", () => {
+  assert.deepEqual(parsePins({ contracts: { "1": ADDRESS } }), { default: "1", contracts: { "1": ADDRESS } });
+  const one = parsePins({ contracts: { "1": ADDRESS } });
+  assert.deepEqual(pinnedTarget(new URL("https://example.com/8453/x"), one), {
+    chain: "1",
+    address: ADDRESS,
+    resource: ["8453", "x"],
+    params: [],
+  });
+});
+
+test("a two-contract configuration is read, and its addresses lower-cased", () => {
+  assert.deepEqual(parsePins({ default: "8453", contracts: { "1": ADDRESS.toUpperCase().replace("0X", "0x"), "8453": B } }), {
+    default: "8453",
+    contracts: { "1": ADDRESS, "8453": B },
+  });
+});
+
+test("a configuration that cannot be acted on is refused, naming what is wrong", () => {
+  for (const [bad, needle] of [
+    [{ contracts: { "1": ADDRESS, "8453": B } }, "needs \"default\""],
+    [{ default: "5", contracts: { "1": ADDRESS, "8453": B } }, '"default" must be one of'],
+    [{ default: "1", contracts: { "1": ADDRESS }, extra: 1 }, 'no key "extra"'],
+    [{ default: "1", contracts: { "01": ADDRESS } }, "not a decimal chain id"],
+    [{ default: "1", contracts: { "1": "0x1234" } }, "must be 0x and 40 hex digits"],
+    [{ default: "1", contracts: {} }, "at least one chain"],
+    ["not an object", "must be a JSON object"],
+    [[{ "1": ADDRESS }], "must be a JSON object"],
+    [{ default: "1", contracts: [] }, '"contracts" must be an object'],
+  ] as [unknown, string][]) {
+    assert.throws(
+      () => parsePins(bad),
+      (error: unknown) =>
+        error instanceof GatewayError && error.kind === "bad-target" && error.message.includes(needle),
+      JSON.stringify(bad),
+    );
+  }
+});
+
+test("with several chains the root redirects to the default, as a 302", () => {
+  assert.deepEqual(two("https://example.com/"), {
+    chain: "1",
+    address: ADDRESS,
+    resource: [],
+    params: [],
+    redirect: "/1/",
+    redirectStatus: 302,
+  });
+});
+
+test("a chain without its trailing slash redirects to it, as a 308", () => {
+  assert.deepEqual(two("https://example.com/8453"), {
+    chain: "8453",
+    address: B,
+    resource: [],
+    params: [],
+    redirect: "/8453/",
+    redirectStatus: 308,
+  });
+});
+
+test("both redirects carry the query", () => {
+  assert.equal(two("https://example.com/?a=1&b=2").redirect, "/1/?a=1&b=2");
+  assert.equal(two("https://example.com/8453?a=1").redirect, "/8453/?a=1");
+});
+
+test("a configured chain's prefix serves that chain's contract", () => {
+  assert.deepEqual(two("https://example.com/8453/"), { chain: "8453", address: B, resource: [], params: [] });
+  assert.deepEqual(two("https://example.com/8453/a/b"), {
+    chain: "8453",
+    address: B,
+    resource: ["a", "b"],
+    params: [],
+  });
+});
+
+/* The case decision 9 exists for: under one chain's prefix, an address that looks like the path form
+   is a resource of the configured contract and never a second contract. */
+test("a path-form path under a prefix reaches the configured contract, with the address as a resource", () => {
+  assert.deepEqual(two(`https://example.com/1/${B}/`), {
+    chain: "1",
+    address: ADDRESS,
+    resource: [B, ""],
+    params: [],
+  });
+});
+
+test("a first segment that is not a configured chain is a 404 that costs no call", () => {
+  for (const path of ["/08453/", "/widget.js", "/favicon.ico", "/5/", "/nope/x"]) {
+    assert.throws(
+      () => two(`https://example.com${path}`),
+      (error: unknown) => error instanceof GatewayError && error.kind === "not-found",
+      path,
+    );
+  }
+});
+
+test("a configured build never reads the hostname", () => {
+  for (const host of ["https://example.com", "http://localhost:8244", `https://${B}.1.gw44.io`]) {
+    assert.deepEqual(two(`${host}/8453/`), { chain: "8453", address: B, resource: [], params: [] });
+  }
 });

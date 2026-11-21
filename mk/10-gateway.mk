@@ -5,6 +5,9 @@ export GW44_PORT
 # One contract at every URL, compiled in: `make build PIN=<chain>:<address>`. Empty is the ordinary
 # build, which reads the contract from the URL and carries every chain in the chains file.
 PIN ?=
+# A project's contracts, one per chain: `make build CONFIG=gw44.json`. Mutually exclusive with PIN.
+CONFIG ?=
+export GW44_CONFIG = $(CONFIG)
 export GW44_PIN = $(PIN)
 
 TSCONFIGS := tsconfig.json tsconfig.sw.json tsconfig.dom.json tsconfig.e2e.json
@@ -22,7 +25,7 @@ node_modules: package.json package-lock.json
 	npm ci
 	@touch node_modules
 
-build: node_modules ## Build the deployable into dist/ (chains from chains.json or GW44_CHAINS=<file>; PIN=<chain>:<address> for one contract)
+build: node_modules ## Build the deployable into dist/ (chains from chains.json or GW44_CHAINS=<file>; PIN=<chain>:<address> or CONFIG=<file> for one project)
 	node tools/build.ts
 
 serve: build ## Serve dist/ on localhost:$(GW44_PORT) under process-compose

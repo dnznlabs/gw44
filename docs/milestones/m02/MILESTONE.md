@@ -28,10 +28,9 @@ The milestone starts when M01 is done. Its last criterion closes in rake's repos
 
 ## Needs from the Product Owner
 
-Each becomes an issue assigned to the Product Owner when M01 closes, not before; none is actionable today.
+The first is filed. The others become issues assigned to the Product Owner when the task that needs them is next.
 
-- **Decision: the test site's hostname.** *Question:* which hostname does the test site live on? *Options:* (1) a name under `dnzn.dev`, such as `gw-test.dnzn.dev`: nothing new is published about `gw44`; (2) `test.gw44.link`: uses the registered domain, and puts the name in a public URL before M05. *Recommendation:* (1), while the repository is private. *Default:* (1) with `gw-test.dnzn.dev`, taken when m02-t01 starts. *Record:* `docs/ROADMAP.md` § Decisions.
-- **Action: DNS and Pages for the test site.** A `CNAME` for the chosen hostname to `dnznlabs.github.io`, and Pages enabled on this repository with that custom domain and HTTPS enforced. Needed by m02-t01. The site is public even though the repository is not.
+- **Action: Pages for the test site** ([#51](https://github.com/dnznlabs/gw44/issues/51)). The hostname is `gw-test.dnzn.dev` (roadmap decision 12) and its DNS record is in place, as is `rake.dnzn.dev`'s (both read 2026-11-21). Still to do: Pages enabled on this repository with GitHub Actions as the source, that custom domain and HTTPS enforced; and `dnzn.dev` verified for the organisation, because a record pointing at GitHub Pages with no site behind it can be claimed by anyone's. Needed by m02-t01.
 - **Action: let another repository call the workflow and read this one.** While `gw44` is private, a caller needs (a) this repository's Actions access set to allow the organisation's repositories, and (b) a read-only deploy key on `gw44` held as a secret in the caller. Needed by m02-t02; whether (a) alone is enough is that task's first check.
 - **Action: criterion 7**, on a phone.
 - **Focus.** Criterion 8 is work in rake's repository. It starts when rake's mainnet addresses exist and the focus allows work there.

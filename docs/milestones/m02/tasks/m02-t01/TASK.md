@@ -16,7 +16,7 @@ Read at scoping, 2026-11-20, on `main` at `2147cac`:
 
 This task changes nothing under `src/` and nothing in `tools/build.ts`. The security review of m01-t06 names a commit; a change to a reviewed file would cost a second run.
 
-0. **Gate.** The action issue for the test site is closed: the hostname resolves to GitHub Pages and Pages is enabled on this repository with **GitHub Actions** as the source, the custom domain set and HTTPS enforced. Check: `dig +short CNAME <host>` prints `dnznlabs.github.io.` and `gh api repos/dnznlabs/gw44/pages --jq '.build_type, .cname, .https_enforced'` prints `workflow`, the hostname and `true`. Do not start step 2 before both.
+0. **Gate.** The action issue for the test site ([#51](https://github.com/dnznlabs/gw44/issues/51)) is closed: `gw-test.dnzn.dev` resolves to GitHub Pages and Pages is enabled on this repository with **GitHub Actions** as the source, the custom domain set and HTTPS enforced. Check: `node -e 'require("dns").promises.resolveCname(process.argv[1]).then(console.log)' gw-test.dnzn.dev` prints `[ 'dnznlabs.github.io' ]` (there is no `dig` on the development VM; the record was read this way on 2026-11-21 and is in place) and `gh api repos/dnznlabs/gw44/pages --jq '.build_type, .cname, .https_enforced'` prints `workflow`, the hostname and `true`. Do not start step 2 before both.
 1. **The deploy workflow, run by hand.** `.github/workflows/pages-test.yml`, triggered by `workflow_dispatch` only, on `main` only. Permissions `contents: read`, `pages: write`, `id-token: write`; environment `github-pages`; `concurrency` so two runs cannot overlap. Steps: checkout, devbox as `ci.yml` installs it, `npm ci`, `GW44_CONFIG=test/fixtures/gw44.two-chains.json node tools/build.ts` with the three hashes left in the log, `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5` with `dist/`, `actions/deploy-pages@v5`. No `CNAME` file: with Actions as the source the custom domain is the repository's setting.
    - Check: the run is green and its log carries three hashes equal to a local build of the same commit with the same configuration.
 2. **`tools/check-site.ts <base URL>`**, typechecked by `tsconfig.e2e.json` so it may use `page.evaluate`. Engines from `GW44_ENGINE`, as the e2e suite takes them; a `make check-site URL=<base URL> ENGINES="…"` target runs it once per engine. Each case in a fresh context, each printing one line with `ok` or `FAIL` and what was seen; exit non-zero on any `FAIL`:
@@ -55,7 +55,7 @@ This task changes nothing under `src/` and nothing in `tools/build.ts`. The secu
 
 ## Open questions
 
-None for the engineer. The hostname is the Product Owner's, by the decision issue this milestone opens; step 0 waits for it.
+None. The hostname is `gw-test.dnzn.dev` (roadmap decision 12); step 0 waits for Pages to be enabled.
 
 ## Context
 

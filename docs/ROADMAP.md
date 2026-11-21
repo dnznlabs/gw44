@@ -9,7 +9,7 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 | Milestone | Goal | Status |
 |:----------|:-----|:-------|
 | [M01 — MVP](milestones/m01/MILESTONE.md) | The prototype hardened and reviewed, and a pinned build that serves one project's contracts, on every chain it is deployed to, from the project's own domain | done 2026-11-21 |
-| [M02 — Dedicated deployment](milestones/m02/MILESTONE.md) | A project deploys its own gateway to GitHub Pages from its own repository with one reusable workflow; `rake.dnzn.dev` is the first | in progress |
+| [M02 — Dedicated deployment](milestones/m02/MILESTONE.md) | A project deploys its own gateway to GitHub Pages from its own repository with one reusable workflow; `rake.dnzn.dev` is the first | done 2026-11-21; `rake.dnzn.dev` itself is rake's M05 |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through a project's gateway | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
 | M05 — Public gateway | The repository is public and `gw44.link` serves any contract, on static hosting, with the base domain on the Public Suffix List | not started |

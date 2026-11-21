@@ -79,7 +79,9 @@ before(async () => {
   probe.close();
   gatewayPort = freePort;
   const out = mkdtempSync(join(tmpdir(), "gw44-e2e-"));
-  const chains = join(out, "chains.json");
+  /* The fixture lives outside GW44_OUT: tools/build.ts fails on anything in the output directory
+     that is not part of the deployable, and a chain map is a build input, not an artefact. */
+  const chains = join(mkdtempSync(join(tmpdir(), "gw44-e2e-chains-")), "chains.json");
   writeFileSync(chains, JSON.stringify({ "31337": [`http://127.0.0.1:${rpcPort}`] }));
   execFileSync(process.execPath, ["tools/build.ts"], { env: { ...process.env, GW44_CHAINS: chains, GW44_OUT: out } });
   server = spawn(process.execPath, ["tools/serve.ts", out], {

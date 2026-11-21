@@ -1,73 +1,138 @@
 # Known answers
 
-Three things this project knew by hand before any audit ran, each with a file, a line and a
-mechanism. **They are given to the rollup only and never to a leg**: the runner reads this file from
-the repository, which the legs cannot see, and appends it to the rollup prompt.
+What this project knew by hand before the run, each with a file and a mechanism. **They are given to
+the rollup only and never to a leg**: the runner reads this file from the repository, which the legs
+cannot see, and appends it to the rollup prompt.
 
 Grading against them is the only evidence about this method that is not an assertion. **A miss is a
-publishable result** — it is recorded plainly in `AUDIT.md`, per leg, and not offset against what
-the legs did find. Judge each on the code location and the mechanism, not on wording: a leg that
-reports the same gap under another name found it.
+publishable result** — it is recorded plainly in `AUDIT.md`, per leg, and not offset against what the
+legs did find. Judge each on the code location and the mechanism, not on wording: a leg that reports
+the same gap under another name found it.
 
-Two of the three are open issues; the third was open at scoping and has since been answered by the
-code, which is why its statement below is not the issue's.
+**This run's eight are fixes, not open findings**, which is the opposite of the earlier runs' known
+answers and is deliberate. The 2026-11-20 and 2026-11-21 runs found all eight; the code under review
+closes them. So each item below grades a different question from before:
 
-## 1. One page load can wait `n × timeoutMs` when endpoints hang (#18)
+- **Silent:** the leg says nothing about it. For a fixed finding this is the ordinary outcome and
+  not a miss, and is recorded as silent rather than graded.
+- **Re-reported:** the leg reports the fixed finding as still open. Record it as a false positive
+  with the file and line it cited, because a method that re-reports its own closed findings would
+  make every run's count meaningless.
+- **Confirmed:** the leg names the mechanism in its no-finding section, or reports a **narrower**
+  gap left by the fix. That is the useful outcome and the reason these are graded at all.
 
-**Where.** `src/adapters/rpc/fetch.ts`, `createFetchRpc`.
+A new finding in the same file is not a re-report: it is a finding, graded on its own.
 
-**What.** The timeout is per endpoint and nothing spans the call. A chain with two endpoints that
-never answer keeps a visitor on the shell for the sum of the timeouts before the 502 — at the
-defaults, twenty seconds for two endpoints — rather than for one timeout. It is deliberate and
-pinned by a test, so that changing it is a visible decision, and it is stated in the adapter's own
-doc comment.
+The three known answers of the earlier runs (#18's accumulating timeout, #36's favicon call, #37's
+build-time pin) are unchanged and are not re-graded here; their grades are in
+`audits/2026-11-20/AUDIT.md` and `audits/2026-11-21/AUDIT.md`.
 
-**What counts as finding it.** Any statement that the per-endpoint timeout accumulates across the
-endpoint list, so that total latency scales with the number of endpoints. A leg that only observes
-"there is a timeout" has not found it.
+## 1. A root document's framing rule (#57)
 
-## 2. The browser's own `/favicon.ico` is a chain call where every path is the contract's (#36)
+**Where.** `src/core/resolve.ts`, `html()` and `ROOT_FRAME_POLICY`; the setting in
+`src/core/target.ts`'s `parsePins` and `src/adapters/sw/config.ts`'s `FRAME`.
 
-**Where.** `src/core/target.ts`, `pinnedTarget`, in the one-contract branch; reached through
-`targetOf` in `src/adapters/sw/config.ts`.
+**What.** `html()` returns bytes and no headers, so a root document used to carry no framing rule at
+all. The gateway now serves it `content-security-policy: frame-ancestors 'self'` unless the
+configuration file says `"frame": "any"`, which omits the header; no other value is accepted, and a
+`PIN=` build takes the default. Sub-paths are unchanged — their headers are the contract's.
 
-**What.** In a build pinned to one contract, every path on the origin is that contract's resource,
-so the browser's unprompted `/favicon.ico` request becomes an ERC-5219 call. A contract that does
-not answer that path costs one reverting `eth_call` per page load against the owner's endpoint.
-Measured: Firefox and WebKit request it, the headless Chromium shell does not. A build configured
-with several chains does **not** have this shape, because `/favicon.ico`'s first path segment is not
-a configured chain and is answered as a 404 with no call.
+**Re-report looks like.** "The root document cannot carry headers, so it is always frameable."
+**Confirmed looks like.** Naming the default, or reporting something narrower: that `"any"` is an
+opt-out a project can set, that the policy is one directive and not a full policy, or that
+`frame-ancestors 'self'` permits same-origin framing by another contract's page on a shared origin.
 
-**What counts as finding it.** Any statement that a browser-initiated request the application never
-asked for reaches the contract in the one-contract build, with the cost named. Naming `favicon.ico`
-specifically is not required; naming the asymmetry between the two builds is a stronger answer.
+## 2. The worker's own path (#62)
 
-## 3. How the pin is enforced, and what a source reader will get wrong (#37)
+**Where.** `src/adapters/sw/sw.ts`, the `fetch` listener; `SW_PATH` in `src/adapters/sw/config.ts`.
 
-**Where.** `src/adapters/sw/config.ts`, `targetOf` and the `__GW44_PINNED__` declaration;
-`tools/build.ts`, the `define` block.
+**What.** The listener answers `/gw44-sw.js` with the gateway's own 404 and no chain call, in every
+build. Under a pin every path is a resource of the contract, so without it a contract could serve
+its own bytes from the gateway's origin at the worker's script URL. The browser fetches the worker's
+script outside the fetch handler, so an update is unaffected.
 
-**Restated for this run, and the restatement is the point.** #37 as filed says a pinned build
-"still carries the unpinned URL parser" and that the pin holds at run time only. **That was true
-when the issue was filed and is false of the code being reviewed.** m01-t05 added a boolean
-`__GW44_PINNED__` to the build's `define`, and `targetOf` selects on that constant alone, so the
-bundler folds the branch away and each build ships one parser. Measured at the review commit:
-`grep -c localhost` on the built `gw44-sw.js` is 1 for the unpinned build and 0 for the one-contract
-and several-chain builds, and `pinnedTarget`'s own marker is 0 in the unpinned worker and 1 in both
-others.
+**Re-report looks like.** "The worker does not reserve its own path" or "a contract can serve
+`gw44-sw.js`". **Confirmed looks like.** Naming the reservation, or something narrower: that the
+static host still serves the real file to the browser, or that no other gateway-owned path is
+reserved.
 
-**Why it is still a known answer.** The legs read source, not the artifact, and
-`src/core/target.ts` contains both parsers at the review commit. A leg that reports "a pinned build
-also carries the parser that reads a contract out of the URL" has read the source correctly and
-reached a conclusion that is wrong about what ships. So this item grades two different things:
+## 3. The boot reload counter (#59)
 
-- **Found, and right:** the leg notices `__GW44_PINNED__` and says the unused parser is eliminated
-  at build time — or asks what the define does to the bundle rather than assuming it does nothing.
-- **Found, and wrong:** the leg claims a pinned build ships the unpinned parser, or that the pin is
-  enforced only at run time. Record this as a false positive **and** as having located the right
-  code, because it is the more useful outcome to know about: it says a source-only review cannot see
-  a build-time guarantee, which is a limit of the method and not of the leg.
-- **Missed:** the leg says nothing about which parser a given build contains.
+**Where.** `src/adapters/sw/fallback.ts`, `attemptsFrom` and `attemptsValue`; used by `attempt()` in
+`src/adapters/sw/boot.ts`.
 
-A leg that recommends removing one parser from the source, or splitting the module, is making a
-design suggestion rather than reporting a defect; note it as such.
+**What.** The counter lives in session storage, which a rendered contract document shares with the
+shell. Only `<digit>:<integer>` with a time not in the future is read as a counter; anything else is
+`MAX_ATTEMPTS`. So a document can stop a reload — one page renders inline instead — and cannot
+license one or drive a loop. The old arithmetic read 13 of 14 values a document can write as a
+licence, including `-1:<now>`, which never reaches the maximum.
+
+**Re-report looks like.** "The loop counter is unvalidated and writable by any document."
+**Confirmed looks like.** Naming the strict parse, or something narrower: that a document can still
+deny the reload, that the storage key itself is not namespaced per contract, or that the clamp to one
+digit is what keeps the written value readable.
+
+## 4. The inlined boot bundle (#58)
+
+**Where.** `tools/inline.ts`, `inlineBoot` and `isScriptSafe`; called once from `tools/build.ts`.
+
+**What.** The one place a bundle is inlined into `shell.html`. `</script` is escaped in any case and
+`<!--` is escaped, and the replacement inserts nothing but backslashes, so the program is unchanged.
+The guard used to be case-sensitive and did not handle `<!--`.
+
+**Re-report looks like.** "The `</script` escape is case-sensitive" or "the inlined script can end
+the element". **Confirmed looks like.** Naming the escaping, or something narrower: that the output
+is not parsed by an HTML parser, that a function replacement is what keeps `$&` in the bundle
+literal, or that the shell's marker is a comment the bundle could contain.
+
+## 5. The chains file (#63)
+
+**Where.** `tools/chains.ts`, `parseChains` and `readChains`; used by `tools/build.ts` and
+`tools/get.ts`.
+
+**What.** One validator for the file both programs read: keys that are decimal chain ids, values
+that are non-empty arrays of `https:` URLs, `http:` for loopback hosts only, nothing else. Before it,
+an `http:` endpoint on a public host, a string where a list belongs, `null`, and a `__proto__` key
+all passed into the bundle.
+
+**Re-report looks like.** "The chains file is never validated." Note separately, and as a false
+positive, any claim that a `__proto__` key in the chains file sets the bundled object's prototype:
+esbuild emits the key computed and `JSON.parse` keeps it an own property, measured both ways.
+**Confirmed looks like.** Naming the validator, or something narrower: that an API key embedded in
+an endpoint URL is still published in the deployable, that the endpoint list is trusted once
+validated, or that `chains.json` itself remains a deployer's file.
+
+## 6. An empty `GW44_PIN` or `GW44_CONFIG` (#73)
+
+**Where.** `tools/build.ts`, the loop over the two variable names.
+
+**What.** Set but empty is an error naming the variable. Unset is still the unpinned build. CI
+templating a value that was not provided used to produce an unpinned build with every chain in the
+chains file, distinguishable only by the log's first line.
+
+**Re-report looks like.** "An empty variable is treated as unset and silently ships an unpinned
+build." **Confirmed looks like.** Naming the check, or something narrower about the build's inputs.
+
+## 7. The build's gates run before it writes (#74)
+
+**Where.** `tools/build.ts`, the size gate and the unexpected-file check.
+
+**What.** Both run before any file is written, so a failed build leaves the output directory as it
+found it. They used to run after the write, so a build that failed either had already replaced
+`index.html` and `404.html`.
+
+**Re-report looks like.** "The build writes the deployable before checking it." **Confirmed looks
+like.** Naming the ordering, or something narrower: that the three writes are not atomic as a set,
+so a crash between them can still leave a mixed directory.
+
+## 8. The sentence on an unconfigured path (#82)
+
+**Where.** `src/adapters/sw/boot.ts`, the `catch` around `targetOf`.
+
+**What.** A configured build throws `not-found` for a first segment it has no contract for, and the
+shell reported it as `gw44: malformed URL`. It now shows the gateway's own message, `gw44: no
+contract at this path`, and anything that is not a `GatewayError` keeps the old sentence.
+
+**Re-report looks like.** "The shell reports a missing contract as a malformed URL." **Confirmed
+looks like.** Naming the distinction, or something narrower: that a `GatewayError`'s message is
+shown to a visitor at all, and that it is set in this repository rather than by a contract.

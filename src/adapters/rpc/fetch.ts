@@ -43,6 +43,12 @@ function isRevert(error: NonNullable<JsonRpcReply["error"]>): boolean {
 /**
  * JSON-RPC over `fetch`, with ordered failover. Limits: one endpoint's word is taken as the chain's;
  * there is no quorum and no proof verification.
+ *
+ * `timeoutMs` bounds **one** endpoint, not the call. The endpoints are tried in order and nothing
+ * spans the list, so with `n` endpoints a single `call` can take up to `n × timeoutMs` before it
+ * throws `upstream` — at the defaults, two endpoints that never answer cost 20 s. Callers that need
+ * a deadline across the whole list must impose it themselves; a budget here is M04's, not this
+ * adapter's.
  */
 export function createFetchRpc(chains: Chains, options: FetchRpcOptions = {}): Rpc {
   const { timeoutMs = 10_000, maxBytes = 16 * 1024 * 1024 } = options;
@@ -58,6 +64,9 @@ export function createFetchRpc(chains: Chains, options: FetchRpcOptions = {}): R
       cache: "no-store",
       referrerPolicy: "no-referrer",
     });
+    /* A non-2xx body is not an answer, whatever it contains. Without this, a 429 or a 500 whose
+       body happened to be JSON-RPC-shaped would be believed and failover would not happen. */
+    if (!res.ok) throw new Error(`endpoint returned HTTP ${res.status}`);
     const text = await readCapped(res, maxBytes);
     const reply = JSON.parse(text) as JsonRpcReply;
     if (reply.error) {

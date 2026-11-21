@@ -8,11 +8,11 @@ Milestones run in order. A milestone is done when every acceptance criterion in 
 
 | Milestone | Goal | Status |
 |:----------|:-----|:-------|
-| [M01 — MVP](milestones/m01/MILESTONE.md) | The prototype hardened into something a stranger can deploy: three browser engines, CI, a reproducible build, a review of record | in progress |
+| [M01 — MVP](milestones/m01/MILESTONE.md) | The prototype hardened into something a stranger can deploy: three browser engines, CI, a reproducible build, a review of record, and a pinned build an owner can host on their own domain | in progress |
 | M02 — Public deployment | `<contract>.<chain>.gw44.link` live for the chains rake uses, on static hosting, with the base domain on the Public Suffix List | not started |
 | M03 — Embeds | A third-party page can load a contract's `widget.js` through gw44 | not started |
 | M04 — Endpoint trust | A single lying RPC endpoint cannot change what a visitor is served | not started |
-| M05 — Names | A contract is reachable by a name its owner already holds (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`), and from the owner's own domain by a pinned build | not started |
+| M05 — Names | A contract is reachable by a name its owner already holds (`<name>.ens.<base>`, `<name>.wei.<base>`, `<name>.gwei.<base>`) | not started |
 | M06 — Registry | A paid on-chain registry gives a contract a short name (`<name>.<base>`) or an outside domain, with certificates for registered domains issued by automation off chain, and payment through Dues | not started |
 
 `MILESTONE.md` for M02–M04 is written when the milestone before it is under way. The MVP is M01; M02 is what makes it usable in public.
@@ -37,7 +37,7 @@ Closed.
 2. **`/` is `html()` and only `html()`.** A contract without it is not served at the root, even if its `request()` would answer. ERC-8244 is the scope; a fallback would make the gateway a general ERC-5219 one.
 3. **The path form is loopback-only.** On a public host it would put every contract in one origin.
 4. **RPC endpoints are compiled in.** Never taken from a URL, and never fetched at run time.
-5. **An owner's own domain is served by a pinned build** (2026-11-20, [#5](https://github.com/dnznlabs/gw44/issues/5)). The owner hosts the two files on their own domain, built to serve one contract at any hostname; it ships in M05. Pointing an outside domain at the public gateway is M06: a paid on-chain registry, with certificates issued by automation off chain. Rejected for now: certificates on demand with no registry, which makes the operator answerable for any domain anyone points at it.
+5. **An owner's own domain is served by a pinned build** (2026-11-20, [#5](https://github.com/dnznlabs/gw44/issues/5)). The owner hosts the two files on their own domain, built to serve one contract at any hostname. It ships in M01, moved forward from M05 on 2026-11-20: it needs no public gateway, so a project such as rake can run on its own domain before M02. Pointing an outside domain at the public gateway is M06: a paid on-chain registry, with certificates issued by automation off chain. Rejected for now: certificates on demand with no registry, which makes the operator answerable for any domain anyone points at it.
 
 6. **A third-party page loads a contract's script through a loader** (2026-11-20, [#2](https://github.com/dnznlabs/gw44/issues/2)). The host page includes one small static gw44 script, pinned by hash, which reads the contract and injects the result. Built in M03. It changes the shape of the embed snippet a project such as rake publishes, and the host's content policy must allow the RPC endpoint. Rejected: a stateless function at the edge, which keeps today's snippet and gives the gateway a server.
 7. **The name is `gw44` and the public base domain is `gw44.link`** (2026-11-20, [#3](https://github.com/dnznlabs/gw44/issues/3)). The domain is registered. A one-way door from M02 on, when the name is in URLs other people publish.

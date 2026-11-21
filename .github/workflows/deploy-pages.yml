@@ -288,6 +288,64 @@ jobs:
           fi
           exit 1
 
-      - id: deployment
+      # Three attempts in one job, because the lookup above and the one `deploy-pages` makes are not
+      # the same view. Measured in run 44947443048: the REST list found the artifact on its first
+      # try at 20:40:15.76 and `deploy-pages` reported `Found 0 artifact(s)` at 20:40:16.24, in that
+      # job, about an artifact still listable a minute later. `deploy-pages` v5 does not use the REST
+      # endpoint: it calls the toolkit's internal `ListArtifacts` with the run and job ids carried by
+      # the runtime token, so the wait watches one view and the action reads another.
+      #
+      # What three attempts measure, and it is the open question: whether that internal view is
+      # **late** or whether it never shows the artifact inside this job. A later attempt deploying
+      # means late, and the retry stays. All three failing means never, and a second job — with its
+      # own job id and token — is the next shape. The retry is safe either way: the failure is at the
+      # metadata lookup, before a deployment is created, so a repeat cannot deploy twice.
+      - id: deploy1
         if: ${{ !inputs.verify-only }}
+        continue-on-error: true
         uses: actions/deploy-pages@v5
+
+      - name: Wait, then try the lookup again
+        if: ${{ !inputs.verify-only && steps.deploy1.outcome == 'failure' }}
+        run: sleep 20
+
+      - id: deploy2
+        if: ${{ !inputs.verify-only && steps.deploy1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait longer, then try once more
+        if: ${{ !inputs.verify-only && steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure' }}
+        run: sleep 60
+
+      # No `continue-on-error` on the last one: if it fails, the job fails.
+      - id: deploy3
+        if: ${{ !inputs.verify-only && steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure' }}
+        uses: actions/deploy-pages@v5
+
+      # One line naming which attempt deployed, so the answer is in the log rather than inferred from
+      # which steps are green.
+      - name: Say which attempt deployed
+        if: ${{ !inputs.verify-only }}
+        env:
+          ONE: ${{ steps.deploy1.outcome }}
+          TWO: ${{ steps.deploy2.outcome }}
+          THREE: ${{ steps.deploy3.outcome }}
+          URL_ONE: ${{ steps.deploy1.outputs.page_url }}
+          URL_TWO: ${{ steps.deploy2.outputs.page_url }}
+          URL_THREE: ${{ steps.deploy3.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          printf 'deploy-pages attempts: 1 %s, 2 %s, 3 %s\n' "$ONE" "${TWO:-skipped}" "${THREE:-skipped}"
+          if [ "$ONE" = success ]; then
+            echo "deployed on the first attempt: $URL_ONE"
+          elif [ "${TWO:-}" = success ]; then
+            echo "deployed on the second attempt, after about 20s: $URL_TWO"
+            echo "so the internal artifact view is late rather than absent; the retry is what carried it"
+          elif [ "${THREE:-}" = success ]; then
+            echo "deployed on the third attempt, after about 80s: $URL_THREE"
+            echo "so the internal artifact view is late rather than absent; the retry is what carried it"
+          else
+            echo "no attempt deployed" >&2
+            exit 1
+          fi

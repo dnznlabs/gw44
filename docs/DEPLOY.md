@@ -1,6 +1,6 @@
 # DEPLOY — a gateway on your own domain
 
-Three static files on a domain you control, serving your contract's pages out of the chain. This takes you from nothing to a deployed gateway, and every command and setting here is one that has been run: the readings quoted are from `gw-test.dnzn.dev`, deployed by this repository's own caller, and the source of each section is mapped in m02-t03's `HANDOFF.md`.
+Three static files on a domain you control, serving your contract's pages out of the chain. This takes you from nothing to a deployed gateway, and every command and setting here is one that has been run: the readings quoted are from `gw-test.dnzn.dev`, deployed by this repository's own caller. Which handoff or issue each section comes from is mapped in `docs/milestones/m02/tasks/m02-t03/HANDOFF.md`, committed with this guide.
 
 Work top to bottom the first time. Each step is a command or a setting, then the reading that shows it worked; if a reading does not match, stop there rather than continuing.
 
@@ -31,9 +31,20 @@ Two boundaries worth knowing before you choose what to put on the domain:
 
 Verify the domain under *Settings → Pages → Add a domain* on the account or organisation (not the repository), and add the `TXT` record it shows. This is the step that is easy to postpone and expensive to postpone: while `yourname.example` resolves to `*.github.io` with no site attached, it is unclaimed (#51).
 
+**The reading that shows the verification landed** is on the repository's Pages endpoint, once § 4 has set the custom domain:
+
+```bash
+gh api repos/<owner>/<repo>/pages --jq '.protected_domain_state'
+# verified
+```
+
+Before the domain is verified the same field reads `unverified`, and `pending_domain_unverified_at` carries the deadline after which Pages stops serving the name.
+
 ## 3 — The configuration
 
-Two files in your own repository. Neither is secret and both are published by the build: the chains file's contents are compiled into `gw44-sw.js`, and anyone can read them.
+Two files in your own repository. Call them what you like — both reach the build as paths you name in the workflow, and this guide uses `gw44.json` and `chains.json` because that is what the test site's caller passes.
+
+Neither is secret, and what the build publishes is **the entries for the chains you configured**: those endpoint URLs are compiled into `gw44-sw.js` and into both pages, where anyone can read them. A chain in your chains file that `gw44.json` does not name is dropped by the build and appears in none of the three files.
 
 ### `gw44.json`
 
@@ -54,7 +65,9 @@ Two files in your own repository. Neither is secret and both are published by th
 | `default` | when there are several | Which chain `/` redirects to. It may be omitted only with one contract, because with two a missing default would mean whichever chain the JSON happened to list first. |
 | `frame` | no, defaults to `"self"` | Who may put your **root** document in a frame. `"self"` serves it with `content-security-policy: frame-ancestors 'self'`; `"any"` omits the header. No other value is accepted. |
 
-**What `"any"` gives up.** With `"self"`, only your own pages can frame your root document; another site cannot put it in an iframe and overlay its own content on your Connect or Sign button. `"any"` allows exactly that, and it is the right choice only for a page meant to be embedded. The setting is those two words and nothing else: a project that needs a policy of its own serves its page from `request()` at a sub-path, where it sets its own headers. A sub-path document gets no framing rule from the gateway at all ([#96](https://github.com/dnznlabs/gw44/issues/96)).
+**What `"any"` gives up.** With `"self"`, only your own pages can frame your root document; another site cannot put it in an iframe and overlay its own content on your Connect or Sign button. `"any"` allows exactly that, and it is the right choice only for a page meant to be embedded.
+
+**What it does not cover, and this is worth knowing before you decide `"self"` is enough.** The header is on the response the **service worker** builds, so it protects every navigation the worker answers — which is every navigation after the first. The **first** load of a visitor's session is the static page from the host, and GitHub Pages cannot send a custom header at all, so that one response carries no framing rule. Measured on the live site: `curl -D - https://gw-test.dnzn.dev/` returns no `content-security-policy` and no `x-frame-options`. What a framer gets in that window is the shell, which renders nothing of your contract and then reloads itself out of the frame's control — but if framing is a threat you are pricing, price it as "every worker-served navigation", not "your root document". The setting is those two words and nothing else: a project that needs a policy of its own serves its page from `request()` at a sub-path, where it sets its own headers. A sub-path document gets no framing rule from the gateway at all ([#96](https://github.com/dnznlabs/gw44/issues/96)).
 
 ### The chains file
 
@@ -73,7 +86,20 @@ Validated by the build, which refuses anything else:
 
 An empty object is accepted and serves nothing. Every chain named in `gw44.json` must appear here, or the build fails naming the chain.
 
-Two things the validator cannot decide for you: an endpoint with an API key in its URL is **published** in all three files, and a credentialed `https://user:pass@…` endpoint cannot work at all, because `fetch` rejects it ([#94](https://github.com/dnznlabs/gw44/issues/94)).
+Two things the validator cannot decide for you: an endpoint with an API key in its URL is **published** in all three files if its chain is configured, and a credentialed `https://user:pass@…` endpoint cannot work at all, because `fetch` rejects it ([#94](https://github.com/dnznlabs/gw44/issues/94)).
+
+### Check the two files before you spend a deploy run
+
+The build is a command, so run it on your own machine first. It comes from a **checkout of `dnznlabs/gw44`**, not from your repository — your repository holds the two JSON files and the caller workflow, and nothing else:
+
+```bash
+git clone https://github.com/dnznlabs/gw44 && cd gw44
+devbox run -- make build CONFIG=/path/to/your/gw44.json GW44_CHAINS=/path/to/your/chains.json
+```
+
+It prints one line per file — a sha256, a size and a name — and those three lines are exactly what `expect` takes in § 5. A mistake in either file fails here, in seconds, with the message § 10 lists, rather than in a deploy run. `GW44_OUT=<dir>` puts the output somewhere other than `dist/`, and `PIN=<chain>:<address>` builds for one contract with no configuration file at all (§ 9).
+
+Everything in §§ 7 and 9 that starts with `make` is run from that checkout too.
 
 ## 4 — DNS and Pages
 
@@ -97,11 +123,21 @@ gh api repos/dnznlabs/gw44/pages --jq '.build_type, .cname, .https_enforced, .pr
 
 `build_type` must be `workflow`; if it says `legacy`, the source is still "Deploy from a branch" and the workflow below will upload an artifact that nothing deploys.
 
+**Whether you can tick Enforce HTTPS yet** is a reading of its own, on the same endpoint — `https_enforced` only tells you what you have already done:
+
+```bash
+gh api repos/<owner>/<repo>/pages --jq '.https_certificate.state'
+# approved
+```
+
+Until it says `approved` the tick box stays disabled; the certificate is issued a few minutes after the custom domain is set.
+
 ## 5 — The workflow
 
-Your repository calls this one. It is `workflow_call` only: there is nothing to dispatch here, and the deploy happens in your repository, from your branch, under your token.
+**The block below goes in your repository**, as `.github/workflows/deploy-gateway.yml`. The workflow it calls is `workflow_call` only — there is nothing to dispatch in `dnznlabs/gw44` — so the deploy runs in your repository, from your branch, under your token.
 
 ```yaml
+# .github/workflows/deploy-gateway.yml, in your repository
 name: deploy-gateway
 
 on:
@@ -141,7 +177,7 @@ This repository's own caller is [`.github/workflows/pages-test.yml`](../.github/
 
 **Pin the commit twice.** `uses:` pins the workflow; `gw44-ref` pins the source it builds. They should be the same commit, and nothing inside the workflow can check that — `uses:` is resolved by GitHub before the job starts and is not readable from inside it.
 
-**`expect`, once you have deployed once.** Take the three lines the build printed and pass them back — the ones below are this repository's two-chain fixture at `a0f6f09`, so they are an example and not a value to copy; the next run then refuses to deploy anything whose bytes differ from what you reviewed:
+**`expect`, once you have deployed once.** The build step prints the three lines in the run's log, and § 3's local build prints the same three; copy them verbatim and pass them back — the ones below are this repository's two-chain fixture at `a0f6f09`, so they are an example and not a value to copy; the next run then refuses to deploy anything whose bytes differ from what you reviewed:
 
 ```yaml
       expect: |
@@ -200,16 +236,31 @@ Where the copies land, and the snippet:
 
 The host page then trusts the **bytes**, not your site: if the file differs from that hash by one byte the browser refuses to run it, which was measured on the deployed site in three engines. Both attributes are needed — without `crossorigin` the browser will not check `integrity` on a cross-origin script.
 
+To check a published copy against a hash you were given, without a deploy log:
+
+```bash
+curl -sS https://your-host/1/widget.js | openssl dgst -sha384 -binary | openssl base64 -A
+# the base64 after `sha384-` in the snippet
+```
+
 **So a contract whose script changes needs a redeploy and a new snippet.** The copies are taken at deploy time and do not follow the chain: publish the new bytes, take the new `integrity`, and update every host page that embeds it. Until they are updated those pages run nothing, which is loud rather than silent.
 
 ## 7 — Checking a deployment
 
+Both targets are run from a **checkout of `dnznlabs/gw44`** (§ 3), against the site you deployed. The browser engines are a download of their own, once per checkout:
+
 ```bash
-make check-site URL=https://your-host SITE_CONFIG=gw44.json \
-  EMBED="1/widget.js=sha384-…"   # the pair the deploy printed
+devbox run -- make browsers ENGINES="chromium firefox webkit"
 ```
 
-Nine cases per engine, each in a fresh browser context, over real HTTPS. Run it once per engine with `ENGINES="chromium firefox webkit"`, or one at a time. What the lines mean:
+```bash
+devbox run -- make check-site URL=https://your-host SITE_CONFIG=/path/to/your/gw44.json \
+  EMBED="1/widget.js=sha384-…"            # the pair the deploy printed
+```
+
+`SITE_CONFIG` is **your** configuration file, the one the site was built from: the default chain and the chain list are what most of the cases assert, so a check run against the wrong file fails for the wrong reason. The quoted readings in this guide come from the test site, which is built from [`test/fixtures/gw44.two-chains.json`](../test/fixtures/gw44.two-chains.json).
+
+Nine cases per engine, each in a fresh browser context, over real HTTPS. **`ENGINES` defaults to `chromium` alone**, so the bare command is one engine; pass `ENGINES="chromium firefox webkit"` for three, or one at a time if a machine is tight on memory. What the lines mean:
 
 | Case | What it proves |
 |:--|:--|
@@ -224,10 +275,23 @@ Nine cases per engine, each in a fresh browser context, over real HTTPS. Run it 
 | the embed on a controlled page is answered by the worker, not by the host | the worker's answer carries `cache-control: no-store` and no `etag`; the host's file carries `max-age=600` and one |
 
 ```bash
-VERIFY_SITE=https://your-host make verify
+VERIFY_SITE=https://your-host \
+  VERIFY_ADDRESS=0xyour-contract \
+  VERIFY_CHAINS="1 8453" \
+  devbox run -- make verify
 ```
 
-That one reaches the chain: it reads your contract through the endpoints in the chains file, decodes the ABI with `cast` and shell arithmetic rather than with anything under `src/`, and compares both hashes with what the site serves. It needs the network and those chains reachable, which is why neither target is part of `make check` or of CI.
+That one reaches the chain, and **the three variables are not optional for a project**: left out, it checks *this repository's* fixture contract on Sepolia and Base Sepolia, which says nothing about your deploy. It announces whose contract it read on its first line —
+
+```
+verify: address 0x… on chains [1 8453]
+```
+
+— so read that line before you read the result. `VERIFY_CHAINS` is the chain set; the **endpoints** come from `./chains.json` in the checkout, or from `GW44_CHAINS=<file>`, which is where your own chains file goes. What it then proves is that what the site serves is byte for byte what the chain returns, decoded by `cast` and shell arithmetic rather than by anything under `src/`, and that a browser renders it.
+
+**With one chain, read the lines rather than the exit code.** The run's last pass builds a configuration from `VERIFY_CHAINS` and asks for `/<chain>/`; with a single chain that configuration is a one-contract build, where the whole path is the contract's resource, so it asks your contract for a resource named after the chain and gets a 404. Every other pass is unaffected and the run still prints `ok` for each. The summary also blames the browser stage for it, which is wrong — both are [#110](https://github.com/dnznlabs/gw44/issues/110). Until that is fixed: with two or more chains the run is clean; with one, the `config` lines fail for a reason that is about this script and not about your deployment.
+
+Neither target is part of `make check` or of CI: one needs a site somebody deployed and the other needs public endpoints, and a gate that depends on either is a decision rather than a detail.
 
 ## 8 — Updating
 
@@ -243,7 +307,9 @@ Pages' own `etag` is derived from modification time and size rather than from co
 
 ## 9 — One contract on one chain
 
-Either a one-entry configuration file, or `PIN=<chain>:<address>` with no file at all. The two produce **byte-identical** output, so a project that grows a second chain changes its configuration file and nothing else.
+**Through the workflow, a one-entry configuration file.** `config` is required and there is no `PIN` input, so `PIN=` is a local build only — `devbox run -- make build PIN=<chain>:<address>` in a checkout of `dnznlabs/gw44`, with no configuration file at all.
+
+The two paths produce **byte-identical** output, measured on local builds of both, so a project that grows a second chain changes its configuration file and nothing else.
 
 With one contract there is no `/<chain>/` prefix: the whole path is the contract's resource. **Every** path on the origin is asked of your contract, including requests the application never made — the browser's own `/favicon.ico` is an ERC-5219 call, which Firefox and WebKit make and the headless Chromium shell does not, so a contract that does not answer that path pays one reverting `eth_call` per page load against your own endpoint ([#36](https://github.com/dnznlabs/gw44/issues/36)).
 
@@ -270,7 +336,8 @@ Failures this project has actually met, with the message each one gives.
 | `gw44-sw.js would be … over the 16384 B limit; nothing was written` | the worker is over its size cap, usually because the chains file compiled in is very large. Nothing was written. |
 | `<dir>/ holds …; the deployable is only 404.html, gw44-sw.js, index.html; run 'make clean'` | something else is in the output directory. The build refuses it rather than deploying a mixture, and writes nothing. |
 | `Found 0 artifact(s)`, right after `Artifact github-pages has been successfully uploaded!` | `actions/deploy-pages` looking the artifact up before it is listable ([upstream #451](https://github.com/actions/deploy-pages/issues/451)). **Do not re-run the failed run**: a re-run uploads a second artifact to the same run and the lookup then fails with `Multiple artifacts … Artifact count is 2`. Dispatch a new run. [#105](https://github.com/dnznlabs/gw44/pull/105) makes the deploy wait for the artifact instead of racing it. |
-| Pages shows the site but HTTPS cannot be enforced | the certificate has not been issued yet. It takes a few minutes after the custom domain is set, and the tick box stays disabled until then. |
+| `<chain> config root: tools/get.ts failed — MISMATCH (…)` from `make verify`, with a single chain, and `verify: the browser stage failed` under browser lines that all say `ok` | not your deployment: `verify.sh`'s config pass asks `/<chain>/` of a one-contract configuration, and the summary names the wrong stage ([#110](https://github.com/dnznlabs/gw44/issues/110)). The other passes are valid. |
+| Pages shows the site but HTTPS cannot be enforced | the certificate has not been issued yet. It takes a few minutes after the custom domain is set, and the tick box stays disabled until then. `.https_certificate.state` reads `approved` when it is ready. |
 | the deploy succeeds and the site serves someone else's content | the hostname was claimed before you verified the domain. § 2, and it is the reason the order in § 2 is not advice. |
 
 ## Related

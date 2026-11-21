@@ -72,14 +72,14 @@ note() { printf '  %s\n' "$*"; }
 printf 'embeds: %s on %d chain(s), into %s\n' "$EMBEDS" "${#PAIRS[@]}" "$SITE"
 
 for path in $EMBEDS; do
-  # A plain relative path and nothing else: the destination is built by joining this to the site
-  # directory, so a `..`, a leading slash or a scheme would write outside it.
-  case "$path" in
-    /*|*..*|*://*|"")
-      echo "embeds: refusing the path '$path': a plain relative path is required" >&2
-      exit 2
-      ;;
-  esac
+  # One path segment of letters, digits, dot, underscore and hyphen, and nothing else. Narrower than
+  # "a plain relative path": that refused `..`, a leading slash and a scheme, but left a path with an
+  # inner `/` or a quote to fail further down, where it would fail closed but for the wrong reason.
+  # A nested embed is not supported rather than accidentally broken; widening this is a decision.
+  if ! printf '%s' "$path" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+    echo "embeds: refusing the path '$path': one segment of letters, digits, '.', '_' or '-' is required" >&2
+    exit 2
+  fi
   for built in $BUILT; do
     if [ "$path" = "$built" ]; then
       echo "embeds: refusing to overwrite the built file '$path'" >&2
@@ -95,6 +95,18 @@ for path in $EMBEDS; do
       note "$chain $path: no endpoint in $CHAINS — FAILED"
       fail=1
       continue
+    fi
+
+    # Decided before either read, because the comparison read has to ask for the same URL the
+    # deployed site will serve. Under a one-contract configuration the whole path is the resource,
+    # so asking for `/<chain>/<path>` would request a resource named after the chain — which the
+    # contract answers 404, and the copy was refused for a reason that had nothing to do with it.
+    if [ "$single" = yes ]; then
+      dest="$SITE/$path"
+      url_path="/$path"
+    else
+      dest="$SITE/$chain/$path"
+      url_path="/$chain/$path"
     fi
 
     # --- the reference side: cast, cut apart by hand ---
@@ -124,7 +136,7 @@ for path in $EMBEDS; do
 
     # --- the compared side: the gateway's own core ---
     if ! GW44_CONFIG="$CONFIG" GW44_CHAINS="$CHAINS" \
-      node tools/get.ts "https://embeds.invalid/$chain/$path" >"$work/served.bin" 2>"$work/get.err"; then
+      node tools/get.ts "https://embeds.invalid$url_path" >"$work/served.bin" 2>"$work/get.err"; then
       note "$chain $path: tools/get.ts failed — FAILED ($(tail -1 "$work/get.err"))"
       fail=1
       continue
@@ -137,13 +149,6 @@ for path in $EMBEDS; do
     fi
 
     # Both reads agree, so write the copy.
-    if [ "$single" = yes ]; then
-      dest="$SITE/$path"
-      url_path="/$path"
-    else
-      dest="$SITE/$chain/$path"
-      url_path="/$chain/$path"
-    fi
     mkdir -p "$(dirname "$dest")"
     cp "$work/chain.bin" "$dest"
 

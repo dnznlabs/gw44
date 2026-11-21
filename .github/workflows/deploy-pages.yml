@@ -78,7 +78,7 @@ jobs:
         env:
           GW44_REF: ${{ inputs.gw44-ref }}
         run: |
-          set -eu
+          set -euo pipefail
           case "$GW44_REF" in
             [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
             *)
@@ -87,8 +87,13 @@ jobs:
               ;;
           esac
 
+      # Neither checkout keeps its credential: `npm ci` and the build run after them and need
+      # neither the job token nor the deploy key, and a credential left in a checkout is one a later
+      # step could use by accident.
       - name: Check out the calling repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # `ssh-key` with an empty value is the same as not passing it, so one step covers a caller in
       # this repository (where the job's token can read it) and a caller elsewhere (where it cannot).
@@ -99,13 +104,14 @@ jobs:
           ref: ${{ inputs.gw44-ref }}
           path: gw44
           ssh-key: ${{ secrets.gw44-read-key }}
+          persist-credentials: false
 
       - name: The configuration and chains files must exist
         env:
           CONFIG: ${{ inputs.config }}
           CHAINS: ${{ inputs.chains }}
         run: |
-          set -eu
+          set -euo pipefail
           for name in CONFIG CHAINS; do
             eval "value=\${$name}"
             if [ -z "$value" ]; then
@@ -136,7 +142,7 @@ jobs:
           CONFIG: ${{ inputs.config }}
           CHAINS: ${{ inputs.chains }}
         run: |
-          set -eu
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/site"
           devbox run -- env \
             GW44_CONFIG="$GITHUB_WORKSPACE/$CONFIG" \
@@ -148,7 +154,7 @@ jobs:
       # puts on its own domain through this workflow (the deployment half of #73).
       - name: The build must be pinned
         run: |
-          set -eu
+          set -euo pipefail
           if ! head -1 "$RUNNER_TEMP/build.log" | grep -q "pinned to"; then
             echo "the build is not pinned; refusing to deploy an unpinned gateway" >&2
             head -1 "$RUNNER_TEMP/build.log" >&2
@@ -159,7 +165,7 @@ jobs:
         env:
           EXPECT: ${{ inputs.expect }}
         run: |
-          set -eu
+          set -euo pipefail
           if [ -z "$EXPECT" ]; then
             echo "no expect given; the build's hashes are in the log above and not checked here"
             exit 0
@@ -192,7 +198,7 @@ jobs:
           GW44_EMBEDS: ${{ inputs.embeds }}
           GW44_SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
-          set -eu
+          set -euo pipefail
           devbox run -- env \
             GW44_CONFIG="$GITHUB_WORKSPACE/$CONFIG" \
             GW44_CHAINS="$GITHUB_WORKSPACE/$CHAINS" \

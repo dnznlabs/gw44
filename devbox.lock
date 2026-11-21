@@ -1,6 +1,54 @@
 {
   "lockfile_version": "1",
   "packages": {
+    "foundry@1.7.1": {
+      "last_modified": "2026-09-03T02:01:15Z",
+      "resolved": "github:NixOS/nixpkgs/5545adfad2e98de106a5544ca7067e03010410bd#foundry",
+      "source": "devbox-search",
+      "version": "1.7.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/ahy079wi7yj8jbfii0d7k30sjyrff89k-foundry-1.7.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/ahy079wi7yj8jbfii0d7k30sjyrff89k-foundry-1.7.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/aw77rd6y914cdvfgzlklbynzzgcdgz1x-foundry-1.7.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/aw77rd6y914cdvfgzlklbynzzgcdgz1x-foundry-1.7.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/w63rwg24mx3vjs1zwmhlzr8d6nwpixg3-foundry-1.7.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/w63rwg24mx3vjs1zwmhlzr8d6nwpixg3-foundry-1.7.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/hlin3d5jsjacbd1j1kwl94nb1dwrn803-foundry-1.7.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/hlin3d5jsjacbd1j1kwl94nb1dwrn803-foundry-1.7.1"
+        }
+      }
+    },
     "git@latest": {
       "last_modified": "2026-11-19T13:46:25Z",
       "resolved": "github:NixOS/nixpkgs/19cfded70b91ca0981373973c5b1efffdd4d6647#git",

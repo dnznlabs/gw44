@@ -92,6 +92,7 @@ Alpha software. Nothing here has been reviewed by anyone but its authors, and th
 make init           # Initialize the development environment (devbox, git hooks)
 make serve          # Build, then serve on http://localhost:8244/<chain>/<contract>/
 make check          # Typecheck, unit tests, browser tests
+make verify         # Prove the gateway serves what a live chain returns (network)
 make browsers       # Install Playwright's browsers for ENGINES
 make get URL=<url>  # Resolve one gateway URL without a browser
 make help           # List every command
@@ -101,7 +102,11 @@ Node 24 and `process-compose` come from `devbox`; run the targets through `devbo
 
 **Browser engines.** `make e2e` runs the browser suite once per engine in `ENGINES`, in order, stopping at the first failure; the default is `ENGINES=chromium`. The names are `chromium`, `firefox` and `webkit`, and any other name fails rather than being skipped. `make browsers` downloads them into Playwright's cache — Chromium arrives as `chromium-headless-shell`.
 
-**Only Chromium is expected to run on a plain checkout.** Firefox and WebKit need system libraries that are not part of `devbox`, so on a machine without them `make e2e ENGINES=firefox` fails at launch with Playwright's "Host system is missing dependencies" and a list. That is a failure and not a skip, deliberately. The three engines all run in CI, which installs the libraries with `playwright-core install --with-deps`; to get them locally, `sudo npx playwright-core install-deps firefox webkit` once.
+**Only Chromium is expected to run on a plain checkout.** Firefox and WebKit need system libraries that are not part of `devbox`, so on a machine without them `make e2e ENGINES=firefox` fails at launch with Playwright's "Host system is missing dependencies" and a list. That is a failure and not a skip, deliberately. The three engines all run in CI, which installs the libraries with `playwright-core install --with-deps`.
+
+To run them locally, `sudo npx playwright-core install-deps firefox webkit` once. That install is enough **because** `make e2e` sets `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1` (`mk/10-gateway.mk`): Playwright's pre-launch check shells out to `ldd`, and under `devbox run --` that is nix's `ldd`, which cannot see system libraries however they were installed. Without the skip the install would make no difference and the engines would still refuse to start.
+
+**`make verify` is the one target that reaches a live chain**, and it is not part of `make check` and not in CI. It reads the fixture contract on Sepolia and Base Sepolia through the endpoints in [`chains.json`](chains.json), decodes the ABI with `cast` and shell arithmetic rather than with anything under `src/`, and compares both hashes with what `tools/get.ts` serves; it finishes by loading the document in headless Chromium. So it needs the network and those two chains reachable. `VERIFY_CHAINS` and `VERIFY_ADDRESS` override what it checks.
 
 The RPC endpoints are [`chains.json`](chains.json), compiled into the worker at build time. To serve another chain, add it there and rebuild; `GW44_CHAINS=<file> make build` uses a different file. Chain `31337` points at `http://127.0.0.1:8545`.
 

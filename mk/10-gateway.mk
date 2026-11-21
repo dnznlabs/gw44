@@ -11,7 +11,7 @@ ENGINES ?= chromium
 # Playwright ships Chromium as a headless shell under a different package name from its engine name.
 BROWSER_PACKAGES = $(patsubst chromium,chromium-headless-shell,$(ENGINES))
 
-.PHONY: build serve typecheck test e2e check get clean browsers
+.PHONY: build serve typecheck test e2e check get clean browsers verify
 
 node_modules: package.json package-lock.json
 	npm ci
@@ -34,13 +34,27 @@ browsers: node_modules ## Install Playwright's browsers for $(ENGINES)
 
 # One run per engine, in order, stopping at the first failure. A named engine that cannot launch is
 # a failure and never a skip, so a missing library is reported rather than passed over.
+#
+# PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS is set here, not in CI, because it is a property of
+# running Playwright through devbox and not of any one runner: the pre-launch check shells out to
+# `ldd`, which inside devbox is nix's glibc `ldd` and cannot see system libraries, so Firefox and
+# WebKit are reported as missing every library they need and never start. Measured on the CI runner:
+# outside devbox `ldd` on the Firefox binary reports 0 "not found"; inside devbox `ldd` resolves to
+# /nix/store/...-glibc-bin/bin/ldd. Skipping the check leaves the launch itself free to fail, which
+# is the honest gate. Closes #10.
 e2e: node_modules ## Browser tests against a fake chain, once per engine in ENGINES="$(ENGINES)"
 	@for e in $(ENGINES); do \
 		echo "==> e2e: $$e"; \
-		GW44_ENGINE=$$e node --test --test-timeout=30000 test/e2e/*.e2e.ts || exit 1; \
+		PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 GW44_ENGINE=$$e \
+			node --test --test-timeout=30000 test/e2e/*.e2e.ts || exit 1; \
 	done
 
 check: test e2e ## Everything a PR must pass
+
+# Deliberately not a prerequisite of `check` and not in the workflow: it reads live contracts over
+# public endpoints, and a gate that depends on those is a decision rather than a detail.
+verify: node_modules ## Prove the gateway serves what the chain returns, with cast as the referee
+	tools/verify.sh
 
 get: node_modules ## Resolve one gateway URL without a browser: make get URL=<url>
 	@node tools/get.ts "$(URL)"

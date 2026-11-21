@@ -49,16 +49,28 @@ jobs:
           GW44_FUZZ_RUNS: "1000000"
         run: devbox run -- make test
 
+      # The build is reproducible or it is not a build anyone can check: two outputs from one commit
+      # must be identical, and the hashes in this log are what a reader compares a local build
+      # against. `npm ls --omit=dev --parseable` printing only the root line is the no-runtime-
+      # dependency claim, checked rather than asserted.
+      - name: The build is reproducible, and has no runtime dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Outside the checkout on purpose: two build directories inside it would be untracked
+          # files, and the working-tree check at the end of this job would fail on them.
+          a="$RUNNER_TEMP/dist-a"
+          b="$RUNNER_TEMP/dist-b"
+          devbox run -- bash -c "GW44_OUT='$a' node tools/build.ts && GW44_OUT='$b' node tools/build.ts"
+          diff -r "$a" "$b"
+          deps=$(devbox run -- npm ls --omit=dev --parseable | wc -l)
+          if [ "$deps" -ne 1 ]; then
+            echo "npm ls --omit=dev printed $deps lines; the deployable must have no runtime dependencies:"
+            devbox run -- npm ls --omit=dev --parseable
+            exit 1
+          fi
+
       - name: Browser tests, three engines
-        env:
-          # Playwright checks its browsers' shared libraries before launching, by running `ldd`.
-          # Inside devbox that resolves to nix's glibc `ldd`, which does not see the apt packages
-          # `--with-deps` just installed, so the check reports every library missing and Firefox
-          # and WebKit never start. Measured on this runner: outside devbox `ldd` on the Firefox
-          # binary reports 0 "not found", inside devbox `ldd` is
-          # /nix/store/...-glibc-2.44-57-bin/bin/ldd. The libraries are there; only the check is
-          # wrong, so it is skipped and the launch itself is left to fail if anything is missing.
-          PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1"
         run: devbox run -- make e2e ENGINES="chromium firefox webkit"
 
       # Last, so it catches anything the build or the tests wrote into a tracked path.

@@ -58,7 +58,12 @@ async function bundle(entry: string): Promise<string> {
     target: "es2022",
     write: false,
     legalComments: "none",
-    define: { __GW44_CHAINS__: JSON.stringify(endpoints), __GW44_PINS__: JSON.stringify(pins) },
+    define: {
+      __GW44_CHAINS__: JSON.stringify(endpoints),
+      __GW44_PINS__: JSON.stringify(pins),
+      // A boolean the bundler can fold both ways, so each build carries one parser and not two.
+      __GW44_PINNED__: String(pins !== null),
+    },
   });
   const file = result.outputFiles[0];
   if (file === undefined) throw new Error(`no output for ${entry}`);

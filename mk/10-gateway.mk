@@ -66,11 +66,17 @@ verify: node_modules ## Prove the gateway serves what the chain returns, with ca
 
 # Deliberately not a prerequisite of `check` and not in the workflow, for `verify`'s reason and one
 # more: it needs a site that somebody deployed, which no gate can assume exists.
-check-site: node_modules ## Check a deployed gateway in a browser: make check-site URL=<base url> [ENGINES="..."]
+# CONFIG names the configuration the site was built from, because the default chain and the chain
+# list are what most of the cases are about. EMBED is `<chain>/<file>=sha384-…` as `tools/embeds.sh`
+# printed it at deploy time; without it the two embed cases report themselves skipped.
+SITE_CONFIG ?= test/fixtures/gw44.two-chains.json
+EMBED ?=
+
+check-site: node_modules ## Check a deployed gateway in a browser: make check-site URL=<base url> [SITE_CONFIG=<file>] [EMBED=<chain>/<file>=sha384-…] [ENGINES="..."]
 	@test -n "$(URL)" || { echo 'make check-site needs URL=<base url>'; exit 2; }
 	@for e in $(ENGINES); do \
 		PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 GW44_ENGINE=$$e \
-			node tools/check-site.ts "$(URL)" test/fixtures/gw44.two-chains.json || exit 1; \
+			node tools/check-site.ts "$(URL)" "$(SITE_CONFIG)" $(EMBED) || exit 1; \
 	done
 
 get: node_modules ## Resolve one gateway URL without a browser: make get URL=<url>

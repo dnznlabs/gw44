@@ -4,7 +4,35 @@ A web gateway built specifically for contract-hosted, on-chain dapps: front ends
 
 by **Denizen.** // dxnzn.wei
 
-The gateway is two static files. A page shell installs a service worker, and from then on the worker answers every request on the origin by calling the contract from the visitor's browser, straight to a public RPC endpoint. There is no gateway server, so there is nothing between the chain and the reader that can hold a stale copy: nothing is cached, and a document the owner changes is what the next reload shows. Each contract gets its own origin, `<contract>.<chain>.<base>`, so one contract's document cannot touch another's.
+## How it Works
+
+The gateway is two static files. A page shell installs a service worker, and from then on the worker answers every `GET` for a URL on the contract's origin by calling the contract from the visitor's browser, straight to a public RPC endpoint: `html()` for the page, `request()` for each file the page loads from that origin. Where service workers are unavailable, the shell makes the `html()` call itself.
+
+That is the only time the gateway's RPC endpoint is used: to load the dapp. Once the dapp is running, its chain traffic is its own. Calls through a connected wallet go to the wallet's endpoint, calls the dapp makes directly go wherever it sends them, and the worker passes both through untouched.
+
+There is no gateway server, so there is nothing between the chain and the reader that can hold a stale copy: nothing is cached, and a document the owner changes is what the next reload shows. Each contract gets its own origin, `<contract>.<chain>.<base>`, so one contract's document cannot touch another's.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant H as Static Host / CDN
+    participant W as Service Worker
+    participant R as RPC Endpoint
+
+    B->>H: GET / (first visit)
+    H-->>B: shell
+    B->>H: register /gw44-sw.js
+    H-->>W: worker installed, page reloads
+    B->>W: GET /
+    W->>R: eth_call html()
+    R-->>W: document
+    W-->>B: the contract's page
+    B->>W: GET /widget.js
+    W->>R: eth_call request()
+    R-->>W: status, headers, body
+    W-->>B: widget.js
+    Note over B,R: Dapp loaded. Its own chain traffic does not pass through the gateway.
+```
 
 ## Motivation
 
@@ -24,7 +52,11 @@ No backends. Minimal trust boundaries between the user and the on-chain dapp.
 
 A working prototype from a spike. It is not deployed anywhere; `gw44` is a working name. What the spike measured and what it could not do are in [docs/spikes/001-static-gateway.md](docs/spikes/001-static-gateway.md).
 
-**Alpha software is alpha, act accordingly.**
+Alpha software is alpha, act accordingly. See [Disclaimer](#disclaimer).
+
+### Disclaimer
+
+Alpha software. Nothing here has been reviewed by anyone but its authors, and there is no external audit ([SECURITY.md](SECURITY.md)). No warranty. gw44 shows what a contract and an RPC endpoint return and vets neither: the document is the contract owner's, not ours, and one endpoint's answer is taken as the chain's. A dapp loading through gw44 says nothing about whether it is safe to connect a wallet to.
 
 ### URLs
 

@@ -1,0 +1,221 @@
+# The workflow a project calls to deploy its own gateway from its own repository.
+#
+#   jobs:
+#     deploy:
+#       uses: dnznlabs/gw44/.github/workflows/deploy-pages.yml@<40-hex commit>
+#       with:
+#         gw44-ref: <the same 40-hex commit>
+#         config: gw44.json
+#         chains: chains.json
+#         embeds: widget.js
+#       secrets:
+#         gw44-read-key: ${{ secrets.GW44_READ_KEY }}
+#
+# A caller pins this repository by commit, twice: once in `uses:` so the workflow itself is pinned,
+# and once in `gw44-ref` so the checked-out source is. They should be the same commit, and nothing
+# here can check that — `uses:` is resolved by GitHub before the job starts and is not readable from
+# inside it.
+#
+# Every value that comes from an input or from the event reaches a shell through `env:`, never by
+# `${{ }}` inside a `run:` line (#83): an expression is substituted into the shell source before bash
+# sees it, so a value containing shell metacharacters would be executed rather than read.
+name: deploy-pages
+
+on:
+  workflow_call:
+    inputs:
+      gw44-ref:
+        description: The gw44 commit to build from, as a full 40-character SHA. A branch or tag is refused.
+        required: true
+        type: string
+      config:
+        description: Path in the calling repository to its gw44.json.
+        required: true
+        type: string
+      chains:
+        description: Path in the calling repository to its chains file.
+        required: true
+        type: string
+      embeds:
+        description: Space-separated resource paths to publish as static copies, for example "widget.js".
+        required: false
+        type: string
+        default: ""
+      expect:
+        description: The three hash lines the build must print. Any difference fails before a deploy.
+        required: false
+        type: string
+        default: ""
+      verify-only:
+        description: Build and check, deploy nothing.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      gw44-read-key:
+        description: A read-only deploy key for dnznlabs/gw44, needed while that repository is private.
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# `pages`, so a deploy here cannot overlap one started by another workflow in the calling repository.
+# Never cancelled: a half-finished deploy leaves a site serving a mixture of two builds.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      # First, before a checkout: a ref that is not a commit cannot be pinned, and a project that
+      # deploys from a moving branch has no way to say what it shipped.
+      - name: The gw44 ref must be a full commit SHA
+        env:
+          GW44_REF: ${{ inputs.gw44-ref }}
+        run: |
+          set -euo pipefail
+          case "$GW44_REF" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *)
+              echo "gw44-ref must be a full 40-character commit SHA; got '$GW44_REF'" >&2
+              exit 1
+              ;;
+          esac
+
+      # Neither checkout keeps its credential: `npm ci` and the build run after them and need
+      # neither the job token nor the deploy key, and a credential left in a checkout is one a later
+      # step could use by accident.
+      - name: Check out the calling repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # `ssh-key` with an empty value is the same as not passing it, so one step covers a caller in
+      # this repository (where the job's token can read it) and a caller elsewhere (where it cannot).
+      - name: Check out gw44 at the pinned commit
+        uses: actions/checkout@v7
+        with:
+          repository: dnznlabs/gw44
+          ref: ${{ inputs.gw44-ref }}
+          path: gw44
+          ssh-key: ${{ secrets.gw44-read-key }}
+          persist-credentials: false
+
+      - name: The configuration and chains files must exist
+        env:
+          CONFIG: ${{ inputs.config }}
+          CHAINS: ${{ inputs.chains }}
+        run: |
+          set -euo pipefail
+          for name in CONFIG CHAINS; do
+            eval "value=\${$name}"
+            if [ -z "$value" ]; then
+              echo "$name is empty; both config and chains are required" >&2
+              exit 1
+            fi
+            if [ ! -f "$value" ]; then
+              echo "$name names no file in this repository: $value" >&2
+              exit 1
+            fi
+          done
+
+      # Pinned as the other workflows pin it: the committed devbox.lock was written by 0.22.0.
+      - uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          devbox-version: 0.22.0
+          enable-cache: true
+          project-path: gw44
+
+      - name: Install dependencies
+        working-directory: gw44
+        run: devbox run -- npm ci
+
+      # The caller's files are read from the caller's checkout, which is the parent directory here.
+      - name: Build the gateway
+        working-directory: gw44
+        env:
+          CONFIG: ${{ inputs.config }}
+          CHAINS: ${{ inputs.chains }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/site"
+          devbox run -- env \
+            GW44_CONFIG="$GITHUB_WORKSPACE/$CONFIG" \
+            GW44_CHAINS="$GITHUB_WORKSPACE/$CHAINS" \
+            GW44_OUT="$RUNNER_TEMP/site" \
+            node tools/build.ts | tee "$RUNNER_TEMP/build.log"
+
+      # An unpinned gateway serves whatever contract a URL names, which must never be what a project
+      # puts on its own domain through this workflow (the deployment half of #73).
+      - name: The build must be pinned
+        run: |
+          set -euo pipefail
+          if ! head -1 "$RUNNER_TEMP/build.log" | grep -q "pinned to"; then
+            echo "the build is not pinned; refusing to deploy an unpinned gateway" >&2
+            head -1 "$RUNNER_TEMP/build.log" >&2
+            exit 1
+          fi
+
+      - name: The hashes must be the ones expected
+        env:
+          EXPECT: ${{ inputs.expect }}
+        run: |
+          set -euo pipefail
+          if [ -z "$EXPECT" ]; then
+            echo "no expect given; the build's hashes are in the log above and not checked here"
+            exit 0
+          fi
+          # Whitespace is normalised on both sides so a caller may paste the build's own lines.
+          grep -E '^ +[0-9a-f]{64} ' "$RUNNER_TEMP/build.log" \
+            | awk '{print $1, $2, $3}' | sort > "$RUNNER_TEMP/built.txt"
+          printf '%s\n' "$EXPECT" | grep -E '[0-9a-f]{64}' \
+            | awk '{print $1, $2, $3}' | sort > "$RUNNER_TEMP/expected.txt"
+          if ! diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/built.txt"; then
+            echo "the build does not match expect; nothing is deployed" >&2
+            exit 1
+          fi
+          echo "the build matches expect, line for line"
+
+      # Before the embeds, because the snippet they print needs the site's own URL, and that is what
+      # this step resolves. Skipped by a verify-only run, which must work where Pages is not enabled;
+      # the snippet then prints its host as a placeholder and says so.
+      - id: pages
+        if: ${{ !inputs.verify-only }}
+        uses: actions/configure-pages@v6
+
+      # After the build has written and checked its own three files, so its gate is untouched.
+      - name: Publish the embed copies
+        if: inputs.embeds != ''
+        working-directory: gw44
+        env:
+          CONFIG: ${{ inputs.config }}
+          CHAINS: ${{ inputs.chains }}
+          GW44_EMBEDS: ${{ inputs.embeds }}
+          GW44_SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          devbox run -- env \
+            GW44_CONFIG="$GITHUB_WORKSPACE/$CONFIG" \
+            GW44_CHAINS="$GITHUB_WORKSPACE/$CHAINS" \
+            GW44_EMBEDS="$GW44_EMBEDS" \
+            GW44_SITE_URL="$GW44_SITE_URL" \
+            tools/embeds.sh "$RUNNER_TEMP/site"
+
+      - name: Say what a verify-only run did not do
+        if: ${{ inputs.verify-only }}
+        run: |
+          echo "verify-only: built and checked, deployed nothing"
+
+      - uses: actions/upload-pages-artifact@v5
+        if: ${{ !inputs.verify-only }}
+        with:
+          path: ${{ runner.temp }}/site
+
+      - id: deployment
+        if: ${{ !inputs.verify-only }}
+        uses: actions/deploy-pages@v5

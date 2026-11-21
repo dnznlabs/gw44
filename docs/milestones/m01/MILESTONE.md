@@ -4,7 +4,7 @@ Status: in progress · updated 2026-11-20
 
 The spike's prototype works in one browser engine on one machine. This milestone makes it something a stranger can clone, verify and deploy: the same behaviour proven in three engines and in CI, limits enforced rather than assumed, a build whose output can be checked against the source, and a security review of record. It comes first because M02 publishes whatever this leaves.
 
-One new feature, the pinned build (criterion 12), moved here from M05 on 2026-11-20 because it needs nothing M02 provides. Everything else is a property the prototype claims and has not yet proven.
+One new feature, the pinned build (criteria 12 and 13), moved here on 2026-11-20 because it needs no public gateway. Since the roadmap was reordered that day it is the thing this milestone exists to ship: M02 deploys it. Everything else is a property the prototype claims and has not yet proven.
 
 ## Acceptance criteria
 
@@ -16,19 +16,20 @@ One new feature, the pinned build (criterion 12), moved here from M05 on 2026-11
 6. `dist/` is `gw44-sw.js`, `index.html` and `404.html`; `gw44-sw.js` is at most 16,384 bytes; `npm ls --omit=dev` lists no package.
 7. A response larger than the configured cap, an endpoint that never answers, and an endpoint that answers with a non-JSON body each produce a 502 within the timeout, shown by a test apiece; with two endpoints configured and the first failing, the second's answer is served.
 8. The decoder fuzz test runs at least 1,000,000 inputs in CI and throws nothing but `GatewayError`.
-9. The bare base URL, which names no contract, shows a page that says what gw44 is and how to form a URL, with no script beyond the shell's.
+9. Moved to M05 on 2026-11-20. It asked for a page at the bare base URL saying what gw44 is and how to form a URL, which is a page for the public gateway. A pinned build has no bare URL.
 10. `SECURITY.md` records a two-leg review of `src/` at a named commit, with every finding dispositioned.
 11. Moved to M02 on 2026-11-20. It asked for `docs/DEPLOY.md`, checked by following it, and following it is a public deployment, which this milestone rules out. The guide is written in M02 by making the deployment it describes. A pinned build's instructions for this milestone are the README section m01-t04 adds.
 12. A pinned build, made by one documented `make` invocation naming a chain id and an address, writes the same three files and serves that contract's `html()` at `/` and its `request()` at every other path on any hostname, loopback or not. It honours neither the host form nor the path form, so no URL makes it serve another contract. Shown by a browser test in three engines on a hostname that is not of the host form, and by `make verify` comparing the pinned build's bytes with the chain's for the fixture. Criteria 5 and 6 hold for it.
+13. A pinned build made from a configuration file naming one project's contract on each of several chains, with one chain marked the default, serves each contract under `/<chain>/` (its `html()` at `/<chain>/`, its `request()` below it), redirects `/` to the default chain's prefix and `/<chain>` to `/<chain>/`, and answers any other first path segment with a 404 that makes no call to any chain. The worker carries the endpoints of the configured chains and no others. A configuration with one contract behaves exactly as criterion 12. Shown by unit tests, by a browser test in three engines with two chains that record which address each call went to, and by `make verify` for the fixture on both of its chains. Criteria 5 and 6 hold for it.
 
 ## Out of scope
 
-- Any public deployment, domain or DNS: M02. That includes putting rake, or anything else, on a real domain with a pinned build: this milestone ships the build and its instructions, and the owner deploys.
-- A pinned build that serves more than one contract, or that takes its contract from a name: M05.
+- Any deployment, domain or DNS: M02. This milestone ships the build and its instructions.
+- A pinned build that serves more than one project, or that takes its contract from a name. One origin per project is roadmap decision 9; names are M06.
 - A loader or an edge function for embeds: M03.
 - Quorum or proof verification: M04.
 - A cache: ruled out, roadmap decision 8.
-- Testing on physical phones and in-app wallet browsers: M02, where there is a public URL to open.
+- Testing on physical phones and in-app wallet browsers: M02, where there is a deployed URL to open.
 
 ## Needs from the Product Owner
 
@@ -51,7 +52,7 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 | Task | Goal | Status |
 |:-----|:-----|:-------|
 | [m01-t04](tasks/m01-t04/TASK.md) | The pinned build: one contract at any hostname (criterion 12) | not started |
-| [m01-t05](tasks/m01-t05/TASK.md) | The base-URL page (criterion 9); carried #11 and #27 | not started |
+| m01-t05 | The configuration file: one project on several chains (criterion 13); carried #11, #27 and #38 | not started |
 | m01-t06 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.

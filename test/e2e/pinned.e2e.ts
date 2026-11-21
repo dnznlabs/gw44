@@ -102,7 +102,10 @@ after(async () => {
 
 async function fresh(): Promise<BrowserContext> {
   const context = await browser.newContext();
-  context.setDefaultTimeout(8000);
+  /* Three times the slowest case observed in CI: "first visit: the shell installs the worker and the
+     contract's document replaces it" took 6,589 ms across the last ten runs on `main`, and the old
+     8,000 ms left so little headroom that a loaded runner failed a passing suite (#38). */
+  context.setDefaultTimeout(20000);
   return context;
 }
 

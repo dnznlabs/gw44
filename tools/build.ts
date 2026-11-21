@@ -2,12 +2,21 @@
 //   node tools/build.ts            chains from ./chains.json, output to ./dist
 //   GW44_CHAINS=… GW44_OUT=… node tools/build.ts
 //   GW44_PIN=<chain>:<address>     one contract at every URL, that chain's endpoints only
+//   GW44_CONFIG=gw44.json          one project's contract per chain, each under /<chain>/
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
-import { type Pin, parsePin } from "../src/core/target.ts";
+import { type Pins, parsePin, parsePins } from "../src/core/target.ts";
 
 const out = process.env["GW44_OUT"] ?? "dist";
+
+/** Every configured contract, and which chain `/` goes to, so the log says what was built. */
+function listing(pins: Pins): string {
+  const each = Object.entries(pins.contracts)
+    .map(([chain, address]) => `${chain}:${address}`)
+    .join(" ");
+  return Object.keys(pins.contracts).length === 1 ? each : `${each}, default ${pins.default}`;
+}
 
 /** The deployable is these three files and nothing else; `gw44-sw.js` holds scope `/` at the root. */
 const EXPECTED = ["404.html", "gw44-sw.js", "index.html"];
@@ -15,19 +24,29 @@ const EXPECTED = ["404.html", "gw44-sw.js", "index.html"];
 const SW_LIMIT = 16_384;
 const chains = JSON.parse(await readFile(process.env["GW44_CHAINS"] ?? "chains.json", "utf8")) as unknown;
 
-/* A pin is compiled in, like the endpoints: the bytes a visitor runs are the whole of what decides
-   which contract is served. An unpinned build defines it as null and keeps every chain. */
+/* The contracts are compiled in, like the endpoints: the bytes a visitor runs are the whole of what
+   decides what is served. An unpinned build defines them as null and keeps every chain. */
 const raw = process.env["GW44_PIN"] ?? "";
-let pin: Pin | null = null;
+const configPath = process.env["GW44_CONFIG"] ?? "";
+if (raw !== "" && configPath !== "") {
+  throw new Error("GW44_PIN and GW44_CONFIG both set; a build serves one configuration, so pick one");
+}
+let pins: Pins | null = null;
 let endpoints = chains;
-if (raw !== "") {
-  pin = parsePin(raw);
+if (raw !== "" || configPath !== "") {
+  pins =
+    configPath === "" ? parsePin(raw) : parsePins(JSON.parse(await readFile(configPath, "utf8")) as unknown);
   const all = chains as Record<string, unknown>;
-  const only = all[pin.chain];
-  if (only === undefined) {
-    throw new Error(`pin ${raw} names chain ${pin.chain}, which the chains file does not carry`);
+  const only: Record<string, unknown> = {};
+  for (const chain of Object.keys(pins.contracts)) {
+    const endpointsFor = all[chain];
+    if (endpointsFor === undefined) {
+      const where = configPath === "" ? `pin ${raw}` : configPath;
+      throw new Error(`${where} names chain ${chain}, which the chains file does not carry`);
+    }
+    only[chain] = endpointsFor;
   }
-  endpoints = { [pin.chain]: only };
+  endpoints = only;
 }
 
 async function bundle(entry: string): Promise<string> {
@@ -39,7 +58,12 @@ async function bundle(entry: string): Promise<string> {
     target: "es2022",
     write: false,
     legalComments: "none",
-    define: { __GW44_CHAINS__: JSON.stringify(endpoints), __GW44_PIN__: JSON.stringify(pin) },
+    define: {
+      __GW44_CHAINS__: JSON.stringify(endpoints),
+      __GW44_PINS__: JSON.stringify(pins),
+      // A boolean the bundler can fold both ways, so each build carries one parser and not two.
+      __GW44_PINNED__: String(pins !== null),
+    },
   });
   const file = result.outputFiles[0];
   if (file === undefined) throw new Error(`no output for ${entry}`);
@@ -72,7 +96,7 @@ for (const name of names) {
   sizes.set(name, bytes.length);
   lines.push(`${createHash("sha256").update(bytes).digest("hex")}  ${String(bytes.length).padStart(7)}  ${name}`);
 }
-console.log(pin === null ? `built ${out}/:` : `built ${out}/ (pinned to ${pin.chain}:${pin.address}):`);
+console.log(pins === null ? `built ${out}/:` : `built ${out}/ (pinned to ${listing(pins)}):`);
 for (const line of lines) console.log(`  ${line}`);
 
 const unexpected = names.filter((n) => !EXPECTED.includes(n));

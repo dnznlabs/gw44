@@ -169,6 +169,50 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
+# --- the configured build resolves the same bytes under each chain's prefix ---
+# One project on both testnets, the first chain the default. The prefix is the whole difference from
+# the pinned pass: the same contract, reached at `/<chain>/` rather than at `/`.
+config=$work/gw44.json
+{
+  printf '{ "default": "%s", "contracts": {' "${VERIFY_CHAINS%% *}"
+  sep=""
+  for chain in $VERIFY_CHAINS; do
+    printf '%s "%s": "%s"' "$sep" "$chain" "$VERIFY_ADDRESS"
+    sep=","
+  done
+  printf ' } }\n'
+} >"$config"
+
+for chain in $VERIFY_CHAINS; do
+  for resource in root widget; do
+    chain_hash=${ref_hash["$chain $resource"]:-}
+    len=${ref_len["$chain $resource"]:-}
+    if [ -z "$chain_hash" ]; then
+      note "$chain config $resource: no reference hash — MISMATCH"
+      fail=1
+      continue
+    fi
+    [ "$resource" = root ] && path="/$chain/" || path="/$chain/widget.js"
+
+    if GW44_CONFIG="$config" node tools/get.ts "https://pinned.invalid$path" \
+      >"$work/served" 2>"$work/get.err"; then
+      served_bytes=$(wc -c <"$work/served")
+      served_hash=$(sha256sum <"$work/served" | cut -d' ' -f1)
+    else
+      note "$chain config $resource: tools/get.ts failed — MISMATCH ($(tail -1 "$work/get.err"))"
+      fail=1
+      continue
+    fi
+
+    if [ "$chain_hash" = "$served_hash" ] && [ "$served_bytes" -eq "$len" ]; then
+      note "$chain config $resource $len B chain=${chain_hash:0:16}… served=${served_hash:0:16}… ok"
+    else
+      note "$chain config $resource chain=$len B $chain_hash served=$served_bytes B $served_hash MISMATCH"
+      fail=1
+    fi
+  done
+done
+
 # --- criterion 3: a browser renders it, not just a decoder ---
 # The static host is `tools/serve.ts` on a free port; the page is the fixture's root per chain. A
 # pass is the title ceasing to be the shell's within the budget, with no page error.
@@ -217,6 +261,34 @@ for chain in $VERIFY_CHAINS; do
     fail=1
   fi
 done
+
+# The configured build gets one directory and one port for both chains, because one build serves
+# them both — which is the thing being checked.
+config_out=$work/config-build
+GW44_OUT=$config_out GW44_CONFIG="$config" node tools/build.ts >/dev/null
+config_port=$(free_port)
+pins+=("$(serve_at "$config_out" "$config_port")")
+if wait_for "$config_port"; then
+  # `/` covers the default chain through its redirect; every other chain is loaded at its prefix. One
+  # load per configured chain, so the count does not change with the number of chains.
+  default=${VERIFY_CHAINS%% *}
+  for chain in $VERIFY_CHAINS; do
+    if [ "$chain" = "$default" ]; then
+      where=/ label="root → $chain"
+    else
+      where="/$chain/" label="$chain"
+    fi
+    if node tools/verify-browser.ts "http://localhost:$config_port$where" "$VERIFY_TIMEOUT_MS"; then
+      note "$label config browser ok"
+    else
+      note "$label config browser MISMATCH"
+      fail=1
+    fi
+  done
+else
+  note "config browser: the host never answered — MISMATCH"
+  fail=1
+fi
 
 [ "$fail" -eq 0 ] || { echo "verify: the browser stage failed" >&2; exit 1; }
 echo "verify: every comparison and every browser load passed"

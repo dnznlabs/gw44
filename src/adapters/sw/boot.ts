@@ -48,7 +48,17 @@ async function renderInline(url: URL): Promise<void> {
 async function boot(): Promise<void> {
   const url = new URL(location.href);
   try {
-    if (targetOf(url) === null) return say("gw44: no contract in this URL");
+    const target = targetOf(url);
+    if (target === null) return say("gw44: no contract in this URL");
+    /* Before any worker is registered: a multi-chain build sends `/` to the default chain's prefix,
+       and the no-worker fallback can only render the root document of the URL it is on. Moving
+       first means that fallback never renders the default chain's document at `/`, where the
+       document's relative URLs would resolve outside the prefix.
+
+       The fragment is carried explicitly. A browser keeps it across the worker's 302 and 308 by
+       itself, but a script navigation does not, so without this a first visit to `/#/docs` landed
+       on `/<default>/` while every later visit landed on `/<default>/#/docs`. */
+    if (target.redirect !== undefined) return void location.replace(target.redirect + location.hash);
   } catch {
     return say("gw44: malformed URL");
   }

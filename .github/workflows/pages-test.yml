@@ -25,6 +25,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # The called workflow's grant is capped by this one, and it lists this run's artifacts.
+  actions: read
 
 jobs:
   deploy:

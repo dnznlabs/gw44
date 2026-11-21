@@ -54,6 +54,7 @@ Open. Each is a `decision` issue, linked from its title.
 - *Options.* (1) A pinned build: the owner hosts the two files on their own domain, built to serve one contract at any hostname. No server, no dependence on the public gateway; the owner does a deploy rather than a DNS edit. (2) CNAME to the public gateway, with certificates issued on demand by the host. A DNS edit for the owner; a hosting service or a server for the operator, and a DNS lookup in the browser to learn which contract the hostname means. (3) Both.
 - *Recommendation.* The pinned build first: it is the only route that keeps the gateway static, and it removes the operator from the owner's trust. CNAME if a host with on-demand certificates is chosen in M02 anyway.
 - *Default and deadline.* The pinned build, in M05. Blocks M05 only, though the choice of host in M02 decides whether option 2 stays cheap.
+- *Direction, 2026-11-20.* Option 2 is a future idea and not M05 work: its shape would be a paid on-chain registry mapping a domain to a contract, with a certificate issued per registered domain. Names under the gateway's own base stay in M05. Whether the pinned build ships in M05 is not ruled; the default stands.
 - *Record.* Here.
 
 Closed.
@@ -74,6 +75,7 @@ For M05's scoping. None is measured; each is a question, not a design.
 
 ## Not on the roadmap
 
+- **Outside domains pointed at the public gateway.** A future idea, as a paid on-chain registry with issued certificates ([#5](https://github.com/dnznlabs/gw44/issues/5)). It needs a host or service that issues certificates on demand, which is a property to weigh when M02 picks a host.
 - **IPFS and the other `web3://` resolve modes.** Out by the project's definition.
 - **A server-side cache of any kind.** It is the failure this project exists to remove.
 - **Chain aliases** (`sep`, `basesep`). A second name for the same origin is a second origin; the chain id is the name.

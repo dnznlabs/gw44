@@ -226,6 +226,33 @@ test("a controlled navigation to a prefix is one eth_call", async () => {
   await context.close();
 });
 
+/* A first visit redirects from a script, a later one from the worker's 302 or 308. The browser
+   carries the fragment across the latter by itself and not across the former, so the two have to be
+   checked against each other or an application's `#` route survives only the second visit. */
+test("a redirect keeps the fragment on a first visit as it does on a later one", async () => {
+  const context = await fresh();
+  const page = await context.newPage();
+
+  const first: string[] = [];
+  for (const from of ["/#x", `/${B_CHAIN}#x`]) {
+    await page.goto(at(from));
+    await page.waitForSelector("#v");
+    first.push(new URL(page.url()).pathname + new URL(page.url()).hash);
+  }
+
+  // The same two URLs again, now that the worker controls the page and answers the redirect itself.
+  const again: string[] = [];
+  for (const from of ["/#x", `/${B_CHAIN}#x`]) {
+    await page.goto(at(from));
+    await page.waitForSelector("#v");
+    again.push(new URL(page.url()).pathname + new URL(page.url()).hash);
+  }
+
+  assert.deepEqual(first, [`/${A_CHAIN}/#x`, `/${B_CHAIN}/#x`]);
+  assert.deepEqual(again, first);
+  await context.close();
+});
+
 /* The redirect happens in `boot.ts` before any worker is registered, so the engine without one ends
    on the prefix too rather than rendering the default chain's document at `/`, where the document's
    relative URLs would resolve outside the prefix. */

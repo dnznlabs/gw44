@@ -3,7 +3,7 @@ import { GatewayError } from "../../core/errors.ts";
 import { errorResponse, resolve } from "../../core/resolve.ts";
 import type { GatewayResponse } from "../../core/ports.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
+import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -21,7 +21,7 @@ async function handle(url: URL): Promise<Response> {
     if (target.redirect !== undefined) {
       return Response.redirect(new URL(target.redirect, url), target.redirectStatus ?? 308);
     }
-    return toResponse(await resolve(target, rpc));
+    return toResponse(await resolve(target, rpc, FRAME));
   } catch (error) {
     return toResponse(errorResponse(error));
   }

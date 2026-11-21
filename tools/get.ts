@@ -48,7 +48,8 @@ try {
     console.error(`location: ${target.redirect}`);
     process.exit(0);
   }
-  res = await resolve(target, createFetchRpc(chains));
+  // The build's framing setting too, so a root document's headers here are a build's headers (#57).
+  res = await resolve(target, createFetchRpc(chains), pins?.frame ?? "self");
 } catch (error) {
   res = errorResponse(error);
 }

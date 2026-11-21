@@ -1,4 +1,5 @@
 import type { GatewayResponse } from "../../core/ports.ts";
+import { ROOT_FRAME_POLICY } from "../../core/resolve.ts";
 import type { Target } from "../../core/target.ts";
 
 /**
@@ -39,12 +40,20 @@ export function isRootTarget(target: Target): boolean {
 /**
  * True when every header of the response is one this page can honour.
  *
- * Inert today and deliberately kept: the root is the only resource the fallback will render, and the
- * core builds a root response from `html()` with fixed headers only, so no contract header can reach
- * here. It becomes live the moment a root response can carry one (#57).
+ * Live since #57, which gives a root document `content-security-policy: frame-ancestors 'self'`. A
+ * document write cannot apply a policy, so the page cannot honour that header the way a real
+ * response would — but it does not have to: `boot.ts` renders only when `window.top === window.self`
+ * (`renderInline`, the check before the chain read), so what it renders is never in a frame at all,
+ * which is stricter than the policy asks for. That holds for this exact policy and for nothing else,
+ * so the value is compared rather than the name allowed: any other directive, including a wider
+ * `frame-ancestors`, is a policy whose effect the page would be dropping, and it declines.
  */
 export function headersAreHonourable(res: GatewayResponse): boolean {
-  return !res.headers.some(([key]) => UNHONOURABLE_HEADERS.includes(key.toLowerCase()));
+  return res.headers.every(([key, value]) => {
+    const name = key.toLowerCase();
+    if (!UNHONOURABLE_HEADERS.includes(name)) return true;
+    return name === "content-security-policy" && value === ROOT_FRAME_POLICY;
+  });
 }
 
 /** Reloads allowed inside `ATTEMPT_WINDOW_MS` before the page stops trying to install a worker. */

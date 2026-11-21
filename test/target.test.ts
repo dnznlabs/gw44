@@ -171,6 +171,12 @@ test("a configuration that cannot be acted on is refused, naming what is wrong",
     ["not an object", "must be a JSON object"],
     [[{ "1": ADDRESS }], "must be a JSON object"],
     [{ default: "1", contracts: [] }, '"contracts" must be an object'],
+    // The framing setting is two words and no policy of its own (#57).
+    [{ default: "1", contracts: { "1": ADDRESS }, frame: "none" }, '"frame" must be "self" or "any"'],
+    [{ default: "1", contracts: { "1": ADDRESS }, frame: "SELF" }, '"frame" must be "self" or "any"'],
+    [{ default: "1", contracts: { "1": ADDRESS }, frame: "frame-ancestors https://a.example" }, '"frame" must be'],
+    [{ default: "1", contracts: { "1": ADDRESS }, frame: true }, '"frame" must be "self" or "any"'],
+    [{ default: "1", contracts: { "1": ADDRESS }, frame: null }, '"frame" must be "self" or "any"'],
   ] as [unknown, string][]) {
     assert.throws(
       () => parsePins(bad),
@@ -243,4 +249,17 @@ test("a configured build never reads the hostname", () => {
   for (const host of ["https://example.com", "http://localhost:8244", `https://${B}.1.gw44.io`]) {
     assert.deepEqual(two(`${host}/8453/`), { chain: "8453", address: B, resource: [], params: [] });
   }
+});
+
+/* The framing key (#57): absent is not "self" written out, because what absent means is one place's
+   decision and `config.ts` makes it. What parsePins owes is to keep the word it was given. */
+test('"frame" is kept when given and left absent when not', () => {
+  const given = parsePins({ contracts: { "1": ADDRESS }, frame: "any" });
+  const absent = parsePins({ contracts: { "1": ADDRESS } });
+
+  assert.equal(given.frame, "any");
+  assert.equal(parsePins({ contracts: { "1": ADDRESS }, frame: "self" }).frame, "self");
+  assert.equal(Object.hasOwn(absent, "frame"), false);
+  // A `PIN=` build has no configuration file at all, so it takes the default the same way.
+  assert.equal(Object.hasOwn(parsePin(`1:${ADDRESS}`), "frame"), false);
 });

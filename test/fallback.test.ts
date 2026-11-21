@@ -13,6 +13,7 @@ import {
   isRootTarget,
 } from "../src/adapters/sw/fallback.ts";
 import type { GatewayResponse } from "../src/core/ports.ts";
+import { ROOT_FRAME_POLICY } from "../src/core/resolve.ts";
 import type { Target } from "../src/core/target.ts";
 import { ADDRESS } from "./helpers.ts";
 
@@ -123,5 +124,23 @@ test("what the page writes is what the parser accepts", () => {
   for (let n = 0; n <= 9; n++) {
     const written = attemptsValue(n, NOW);
     assert.equal(attemptsFrom(written, NOW), Math.min(n + 1, 9), written);
+  }
+});
+
+/* The one header the fallback now meets, since #57 gives a root document a framing policy. It is
+   honoured by where the page renders rather than by applying it: `boot.ts` renders only at the top
+   level, which is stricter than `frame-ancestors 'self'` asks for. Anything else is declined. */
+test("the gateway's own framing default is honourable; another policy is not", () => {
+  assert.equal(headersAreHonourable(response([["content-security-policy", ROOT_FRAME_POLICY]])), true);
+  assert.equal(headersAreHonourable(response([["Content-Security-Policy", ROOT_FRAME_POLICY]])), true);
+  for (const value of [
+    "frame-ancestors *",
+    "frame-ancestors 'self' https://example.com",
+    "frame-ancestors  'self'",
+    "default-src 'none'",
+    `${ROOT_FRAME_POLICY}; default-src 'none'`,
+    "",
+  ]) {
+    assert.equal(headersAreHonourable(response([["content-security-policy", value]])), false, value);
   }
 });

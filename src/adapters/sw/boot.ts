@@ -2,7 +2,7 @@
 import { GatewayError } from "../../core/errors.ts";
 import { resolve } from "../../core/resolve.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
+import { CHAINS, FRAME, PURGE, SW_PATH, targetOf } from "./config.ts";
 import {
   MAX_ATTEMPTS,
   attemptsFrom,
@@ -51,7 +51,7 @@ async function renderInline(url: URL): Promise<void> {
   // Both checked before the call, so a URL that will be declined costs no chain read.
   if (window.top !== window.self) return say(NEEDS_WORKER);
   if (!isRootTarget(target)) return say(NEEDS_WORKER);
-  const res = await resolve(target, createFetchRpc(CHAINS));
+  const res = await resolve(target, createFetchRpc(CHAINS), FRAME);
   const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
   const text = new TextDecoder().decode(res.body);
   if (res.status !== 200 || !type.startsWith("text/html")) return say(text.trim());

@@ -1,8 +1,7 @@
 /// <reference lib="dom" />
 import { resolve } from "../../core/resolve.ts";
-import { parseTarget } from "../../core/target.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE, SW_PATH } from "./config.ts";
+import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
 
 // The static host serves this page for every URL. It runs only when the service worker does not
 // control the page: a first visit, a forced reload, or a browser without service workers.
@@ -35,7 +34,7 @@ function attempt(): number {
  * URL, but only the root: without a worker nothing can answer the document's relative URLs.
  */
 async function renderInline(url: URL): Promise<void> {
-  const target = parseTarget(url);
+  const target = targetOf(url);
   if (target === null) return;
   const res = await resolve(target, createFetchRpc(CHAINS));
   const type = res.headers.find(([k]) => k === "content-type")?.[1] ?? "";
@@ -49,7 +48,7 @@ async function renderInline(url: URL): Promise<void> {
 async function boot(): Promise<void> {
   const url = new URL(location.href);
   try {
-    if (parseTarget(url) === null) return say("gw44: no contract in this URL");
+    if (targetOf(url) === null) return say("gw44: no contract in this URL");
   } catch {
     return say("gw44: malformed URL");
   }

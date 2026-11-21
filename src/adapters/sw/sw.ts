@@ -1,9 +1,8 @@
 /// <reference lib="webworker" />
 import { errorResponse, resolve } from "../../core/resolve.ts";
 import type { GatewayResponse } from "../../core/ports.ts";
-import { parseTarget } from "../../core/target.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE } from "./config.ts";
+import { CHAINS, PURGE, targetOf } from "./config.ts";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -16,7 +15,7 @@ function toResponse(r: GatewayResponse): Response {
 
 async function handle(url: URL): Promise<Response> {
   try {
-    const target = parseTarget(url);
+    const target = targetOf(url);
     if (target === null) return fetch(url);
     if (target.redirect !== undefined) return Response.redirect(new URL(target.redirect, url), 308);
     return toResponse(await resolve(target, rpc));
@@ -36,7 +35,7 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" && event.request.method !== "HEAD") return;
   let named: boolean;
   try {
-    named = parseTarget(url) !== null;
+    named = targetOf(url) !== null;
   } catch {
     named = true; // malformed, but ours to answer
   }

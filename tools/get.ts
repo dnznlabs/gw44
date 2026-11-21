@@ -2,10 +2,11 @@
 // stdout. The scriptable check a static gateway otherwise lacks, since curl only ever sees the shell.
 //   node tools/get.ts http://localhost:8244/11155111/0x…/widget.js
 //   node tools/get.ts https://0x….11155111.gw44.io/
+//   GW44_PIN=<chain>:<address> node tools/get.ts https://any.host/  resolve as a pinned build does
 import { readFile } from "node:fs/promises";
 import { createFetchRpc, type Chains } from "../src/adapters/rpc/fetch.ts";
 import { errorResponse, resolve } from "../src/core/resolve.ts";
-import { parseTarget } from "../src/core/target.ts";
+import { parsePin, parseTarget, pinnedTarget } from "../src/core/target.ts";
 
 const arg = process.argv[2];
 if (arg === undefined) {
@@ -16,7 +17,11 @@ const chains = JSON.parse(await readFile(process.env["GW44_CHAINS"] ?? "chains.j
 const started = performance.now();
 let res;
 try {
-  const target = parseTarget(new URL(arg));
+  /* The same decision a pinned build compiles in, so the pinned path can be compared with the
+     chain without a browser. The pin is read here and not from the build's output on purpose. */
+  const raw = process.env["GW44_PIN"] ?? "";
+  const url = new URL(arg);
+  const target = raw === "" ? parseTarget(url) : pinnedTarget(url, parsePin(raw));
   if (target === null) {
     console.error("gw44: no contract in this URL");
     process.exit(2);

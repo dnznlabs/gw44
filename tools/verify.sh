@@ -28,17 +28,12 @@ cd "$root"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Hex to raw bytes. `xxd` is not a devbox package — it comes from the host on this machine — so the
-# node path is the one that is always available, and which of the two ran is printed.
-if command -v xxd >/dev/null 2>&1; then
-  UNHEX_WITH=xxd
-  unhex() { xxd -r -p; }
-else
-  UNHEX_WITH=node
-  unhex() {
-    node -e 'let h="";process.stdin.on("data",c=>h+=c);process.stdin.on("end",()=>process.stdout.write(Buffer.from(h.replace(/\s/g,""),"hex")))'
-  }
-fi
+# Hex to raw bytes, through node alone. `xxd` is not a devbox package, so a build that preferred it
+# decoded differently on a host that happened to have it than on one that did not, and the branch
+# that was always available was the one nobody ever ran (#26).
+unhex() {
+  node -e 'let h="";process.stdin.on("data",c=>h+=c);process.stdin.on("end",()=>process.stdout.write(Buffer.from(h.replace(/\s/g,""),"hex")))'
+}
 
 # A 32-byte ABI word is 64 hex characters and bash arithmetic is 64-bit, so only the low 8 bytes are
 # read. A length or offset that needed more than that would not fit in memory anyway.
@@ -47,7 +42,16 @@ word_at() { echo $((16#${1:$2+48:16})); }
 fail=0
 note() { printf '  %s\n' "$*"; }
 
-printf 'verify: address %s on chains [%s], hex decoded with %s\n' "$VERIFY_ADDRESS" "$VERIFY_CHAINS" "$UNHEX_WITH"
+# The reference hashes, keyed `<chain> <resource>`, so the pinned pass below compares against the
+# same chain-side bytes rather than reading the chain a second time.
+declare -A ref_hash
+declare -A ref_len
+
+# The status an ERC-5219 resource must answer for its body to be the thing being compared. An
+# override exists so the branch can be shown failing without a contract that answers anything else.
+VERIFY_STATUS=${VERIFY_STATUS:-200}
+
+printf 'verify: address %s on chains [%s]\n' "$VERIFY_ADDRESS" "$VERIFY_CHAINS"
 
 for chain in $VERIFY_CHAINS; do
   endpoint=$(node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync("chains.json","utf8"));process.stdout.write((c[process.argv[1]]||[])[0]||"")' "$chain")
@@ -81,6 +85,13 @@ for chain in $VERIFY_CHAINS; do
       # the status, word 1 the body's offset from the start of the return data; the length and the
       # bytes follow at that offset.
       if [ -n "$hex" ] && [ ${#hex} -ge 192 ]; then
+        # Word 0 is the status, and a body carried by a 404 is not the resource (#29).
+        status=$(word_at "$hex" 0)
+        if [ "$status" -ne "$VERIFY_STATUS" ]; then
+          note "$chain $resource: the chain answered status $status, not $VERIFY_STATUS — MISMATCH"
+          fail=1
+          continue
+        fi
         boff=$(word_at "$hex" 64)
         len=$(word_at "$hex" $((boff * 2)))
         data=${hex:$((boff * 2 + 64)):$((len * 2))}
@@ -108,10 +119,46 @@ for chain in $VERIFY_CHAINS; do
       continue
     fi
 
+    ref_hash["$chain $resource"]=$chain_hash
+    ref_len["$chain $resource"]=$len
+
     if [ "$chain_hash" = "$served_hash" ] && [ "$served_bytes" -eq "$len" ]; then
       note "$chain $resource $len B chain=${chain_hash:0:16}… served=${served_hash:0:16}… ok"
     else
       note "$chain $resource chain=$len B $chain_hash served=$served_bytes B $served_hash MISMATCH"
+      fail=1
+    fi
+  done
+done
+
+# --- the pinned build resolves the same bytes from a URL that names no contract ---
+# `pinned.invalid` is deliberately neither loopback nor a host-form name: under a pin the hostname is
+# never read, so a URL that the unpinned gateway would refuse must still resolve to the contract.
+for chain in $VERIFY_CHAINS; do
+  for resource in root widget; do
+    chain_hash=${ref_hash["$chain $resource"]:-}
+    len=${ref_len["$chain $resource"]:-}
+    if [ -z "$chain_hash" ]; then
+      note "$chain pinned $resource: no reference hash — MISMATCH"
+      fail=1
+      continue
+    fi
+    [ "$resource" = root ] && path=/ || path=/widget.js
+
+    if GW44_PIN="$chain:$VERIFY_ADDRESS" node tools/get.ts "https://pinned.invalid$path" \
+      >"$work/served" 2>"$work/get.err"; then
+      served_bytes=$(wc -c <"$work/served")
+      served_hash=$(sha256sum <"$work/served" | cut -d' ' -f1)
+    else
+      note "$chain pinned $resource: tools/get.ts failed — MISMATCH ($(tail -1 "$work/get.err"))"
+      fail=1
+      continue
+    fi
+
+    if [ "$chain_hash" = "$served_hash" ] && [ "$served_bytes" -eq "$len" ]; then
+      note "$chain pinned $resource $len B chain=${chain_hash:0:16}… served=${served_hash:0:16}… ok"
+    else
+      note "$chain pinned $resource chain=$len B $chain_hash served=$served_bytes B $served_hash MISMATCH"
       fail=1
     fi
   done
@@ -126,24 +173,50 @@ fi
 # The static host is `tools/serve.ts` on a free port; the page is the fixture's root per chain. A
 # pass is the title ceasing to be the shell's within the budget, with no page error.
 echo "verify: browser stage"
+
+free_port() {
+  node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})'
+}
+serve_at() { # <dir> <port> -> pid on stdout
+  GW44_PORT=$2 node tools/serve.ts "$1" >>"$work/serve.log" 2>&1 &
+  echo $!
+}
+wait_for() {
+  for _ in $(seq 1 50); do
+    curl -s -o /dev/null "http://127.0.0.1:$1/" && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
 make --no-print-directory build >/dev/null
-port=$(node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')
-GW44_PORT=$port node tools/serve.ts dist >"$work/serve.log" 2>&1 &
-serve_pid=$!
-trap 'kill "$serve_pid" 2>/dev/null || true; rm -rf "$work"' EXIT
-for _ in $(seq 1 50); do
-  curl -s -o /dev/null "http://127.0.0.1:$port/" && break
-  sleep 0.1
-done
+port=$(free_port)
+serve_pid=$(serve_at dist "$port")
+pins=()
+trap 'kill "$serve_pid" ${pins[*]} 2>/dev/null || true; rm -rf "$work"' EXIT
+wait_for "$port" || { echo "verify: the unpinned host never answered" >&2; exit 1; }
 
 for chain in $VERIFY_CHAINS; do
-  if node tools/verify-browser.ts "$port" "$chain" "$VERIFY_ADDRESS" "$VERIFY_TIMEOUT_MS"; then
+  if node tools/verify-browser.ts "http://localhost:$port/$chain/$VERIFY_ADDRESS/" "$VERIFY_TIMEOUT_MS"; then
     note "$chain browser ok"
   else
     note "$chain browser MISMATCH"
     fail=1
   fi
+
+  # The pinned build gets its own directory and its own port, because its root is the contract and
+  # there is no URL on it that would name a chain or an address.
+  pin_out=$work/pinned-$chain
+  GW44_OUT=$pin_out GW44_PIN="$chain:$VERIFY_ADDRESS" node tools/build.ts >/dev/null
+  pin_port=$(free_port)
+  pins+=("$(serve_at "$pin_out" "$pin_port")")
+  if wait_for "$pin_port" && node tools/verify-browser.ts "http://localhost:$pin_port/" "$VERIFY_TIMEOUT_MS"; then
+    note "$chain pinned browser ok"
+  else
+    note "$chain pinned browser MISMATCH"
+    fail=1
+  fi
 done
 
 [ "$fail" -eq 0 ] || { echo "verify: the browser stage failed" >&2; exit 1; }
-echo "verify: every comparison and both browser loads passed"
+echo "verify: every comparison and every browser load passed"

@@ -24,7 +24,9 @@ A static web gateway for ERC-8244 `html()` and ERC-5219 `request()`. Two shipped
 
 `make build PIN=<chain>:<address>` compiles one contract into the deployable: every URL on the origin serves it, the hostname is never read, and only that chain's endpoints are embedded. `make build CONFIG=<file>` does the same for one project's contract on each of several chains, each under `/<chain>/` with `/` redirecting to the default; `PIN` and `CONFIG` together is an error. Both empty is the ordinary build. `GW44_PIN` and `GW44_CONFIG` are the variables the tools read, and `tools/get.ts` honours both, printing a redirect rather than following it.
 
-**`make verify` is not part of `make check`, and that is deliberate: CI is offline.** It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
+`make audit` runs the security review of record: two language models in two harnesses read `audits/SCOPE` independently, blind, in a tree outside the repository, and a third pass reconciles them into `audits/<date>/AUDIT.md`. **It costs rate limit and wall clock — tens of minutes** (2026-11-20: 360 s, 355 s and 233 s for the two legs and the rollup) and needs both CLIs authenticated. `CODEX_MODEL`, `CLAUDE_MODEL` and `AUDIT_DATE` override what it runs. Audits are append-only and preflight refuses a date that already has one; the method, and why the legs run blind, are in `audits/README.md`.
+
+**Neither `make verify` nor `make audit` is part of `make check`, and that is deliberate.** For verify, CI is offline. It reads live contracts over the public endpoints in `chains.json`, so making it a gate would make every push depend on somebody else's rate limit. It is the only target that touches a chain, it is absent from the workflow, and `make check` does not reach it. Run it by hand when the question is whether the gateway and the chain still agree.
 
 ## Conventions
 

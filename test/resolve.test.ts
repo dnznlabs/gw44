@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createFetchRpc } from "../src/adapters/rpc/fetch.ts";
 import { type MemoryCalls, createMemoryRpc, memoryKey } from "../src/adapters/rpc/memory.ts";
 import { HTML_SELECTOR, encodeRequest } from "../src/core/abi.ts";
 import { GatewayError } from "../src/core/errors.ts";
@@ -158,4 +159,31 @@ test("an RPC outage is 502, and an unexpected throw does not leak its message", 
   assert.equal(outage.status, 502);
   assert.equal(bug.status, 502);
   assert.doesNotMatch(text(bug.body), /secret/);
+});
+
+/* The real adapter, end to end, once: everything above substitutes `Rpc` itself, so nothing else
+   pins what a visitor sees when the configured endpoint is the thing that failed. */
+test("the real fetch adapter behind resolve(): a failing endpoint is 502 text, with none of its body", async () => {
+  const target = parseTarget(new URL(`https://${ADDRESS}.1.gw44.io/`));
+  assert.ok(target);
+  const rpc = createFetchRpc(
+    { "1": ["https://endpoint.invalid"] },
+    {
+      fetch: (async () =>
+        new Response("rate limited: project 0bad51de over quota, contact support@example.invalid", {
+          status: 429,
+        })) as typeof fetch,
+    },
+  );
+
+  const res = await resolve(target, rpc);
+  const body = text(res.body);
+
+  assert.equal(res.status, 502);
+  assert.equal(header(res.headers, "content-type"), "text/plain; charset=utf-8");
+  assert.equal(body, "gw44: no RPC endpoint for chain 1 answered\n");
+  // The endpoint's body is the part that must not travel: it can name a project, a key or a host.
+  for (const leak of ["rate limited", "0bad51de", "support@example.invalid", "429"]) {
+    assert.doesNotMatch(body, new RegExp(leak), `the endpoint's body reached the client: ${leak}`);
+  }
 });

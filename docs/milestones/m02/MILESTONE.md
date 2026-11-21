@@ -40,7 +40,7 @@ The first is filed. The others become issues assigned to the Product Owner when 
 Updated 2026-11-21. Criteria 1 to 7 are met on the test site, `https://gw-test.dnzn.dev`. Open before the milestone can close:
 
 - **Criterion 8, `rake.dnzn.dev`**, which is rake's m05-t04 and waits on rake's mainnet addresses.
-- **Decision [#114](https://github.com/dnznlabs/gw44/issues/114)**: a redeploy does not reach a returning visitor by navigation alone (measured, [#85](https://github.com/dnznlabs/gw44/issues/85)); whether the worker asks for the update check itself, and when.
+- **[#85](https://github.com/dnznlabs/gw44/issues/85), and a section of the deploy guide to correct.** Roadmap decision 14 (2026-11-21): a redeploy does reach a returning visitor by navigating, and nothing is built for it. `docs/DEPLOY.md` § 8 and m02-t02's handoff still say the opposite and are corrected in one Markdown change; one reading on GitHub Pages with the browser left open is taken at the next deploy that changes the worker.
 - **The deploy step fails more often than it should**: three of eight runs through the reusable workflow deployed, for a reason inside GitHub's deploy action that an in-job retry now covers ([#111](https://github.com/dnznlabs/gw44/pull/111)). The two runs since both deployed on the first attempt; two is not a rate.
 - **Carried issues labelled `m02`** that are not yet placed: [#77](https://github.com/dnznlabs/gw44/issues/77), [#107](https://github.com/dnznlabs/gw44/issues/107), [#109](https://github.com/dnznlabs/gw44/issues/109), [#110](https://github.com/dnznlabs/gw44/issues/110). Each is fixed, moved or dropped with a reason at the close-out.
 

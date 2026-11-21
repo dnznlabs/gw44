@@ -23,6 +23,7 @@ export const CHAINS: Chains = __GW44_CHAINS__;
 export const targetOf: (url: URL) => Target | null = __GW44_PINNED__
   ? (url: URL) => pinnedTarget(url, __GW44_PINS__ as Pins)
   : parseTarget;
-/** Reserved on every origin the gateway serves; a contract's own resource of this name is shadowed. */
+/** Reserved on every origin the gateway serves: the worker answers this path itself with a 404 and
+ *  no chain read, so a contract's own resource of this name is shadowed rather than served (#62). */
 export const SW_PATH = "/gw44-sw.js";
 export const PURGE = "gw44:purge";

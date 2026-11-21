@@ -35,6 +35,12 @@ const calls = new Map<string, Uint8Array>([
     encodeRequest(PATH_FORM_RESOURCE, []),
     requestResult(200, '<!doctype html><title>path</title><h1 id="v">path-form</h1>', [["Content-Type", "text/html"]]),
   ],
+  /* A contract that does serve the gateway's own script path, so the worker's 404 is a decision and
+     not the absence of an answer (#62). */
+  [
+    encodeRequest(["gw44-sw.js"], []),
+    requestResult(200, 'globalThis.pwned = "from the contract"', [["Content-Type", "text/javascript"]]),
+  ],
 ]);
 /** Every call the chain saw, so a test can assert what was asked of whom. */
 const seen: { to: string; data: string }[] = [];
@@ -176,6 +182,35 @@ test("a path-form path naming another contract is a resource of the pinned contr
   assert.deepEqual(
     made.filter((c) => c.to !== ADDRESS),
     [],
+  );
+  await context.close();
+});
+
+/* The worker's own path, which under a pin would otherwise be a resource of the pinned contract:
+   the contract here answers `gw44-sw.js` with a script, and the test is that the page never gets it
+   and the chain is never asked (#62). Read from a controlled document, because that is the only way
+   the request reaches the worker's fetch handler at all. */
+test("the worker answers its own path with a 404 and no call", async () => {
+  const context = await fresh();
+  const page = await context.newPage();
+  await page.goto(`http://localhost:${port}/`);
+  await page.waitForSelector("#v");
+  await page.waitForFunction(() => document.documentElement.dataset["widget"] === "ran");
+
+  const at = seen.length;
+  const got = await page.evaluate(async () => {
+    const res = await fetch("/gw44-sw.js");
+    return { status: res.status, type: res.headers.get("content-type"), body: await res.text() };
+  });
+  const wanted = encodeRequest(["gw44-sw.js"], []);
+
+  assert.equal(got.status, 404);
+  assert.match(got.type ?? "", /^text\/plain/);
+  assert.match(got.body, /^gw44: \/gw44-sw\.js is the gateway's own script/);
+  assert.deepEqual(
+    seen.slice(at).filter((c) => c.data === wanted),
+    [],
+    "the chain was asked for the worker's path",
   );
   await context.close();
 });

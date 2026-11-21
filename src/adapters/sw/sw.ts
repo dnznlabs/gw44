@@ -1,8 +1,9 @@
 /// <reference lib="webworker" />
+import { GatewayError } from "../../core/errors.ts";
 import { errorResponse, resolve } from "../../core/resolve.ts";
 import type { GatewayResponse } from "../../core/ports.ts";
 import { createFetchRpc } from "../rpc/fetch.ts";
-import { CHAINS, PURGE, targetOf } from "./config.ts";
+import { CHAINS, PURGE, SW_PATH, targetOf } from "./config.ts";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -35,6 +36,17 @@ self.addEventListener("fetch", (event) => {
   // Not ours: the document's own traffic (its RPC, its wallet) and anything that is not a read.
   if (url.origin !== self.location.origin) return;
   if (event.request.method !== "GET" && event.request.method !== "HEAD") return;
+  /* The gateway's own script, answered here in every build and never read from a contract (#62).
+     A pinned build turns every path into a resource of its contract, so without this the path the
+     worker is registered from is an `eth_call`, and whatever the contract returns for it is served
+     from the gateway's origin at the gateway's own script URL. The browser fetches the worker's
+     script outside this handler, so a worker update is unaffected: what reaches here is a page
+     asking for the file. */
+  if (url.pathname === SW_PATH) {
+    return event.respondWith(
+      toResponse(errorResponse(new GatewayError("not-found", `${SW_PATH} is the gateway's own script`))),
+    );
+  }
   let named: boolean;
   try {
     named = targetOf(url) !== null;

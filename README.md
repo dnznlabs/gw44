@@ -121,7 +121,7 @@ Only the pinned chain's endpoints are compiled in. Point `GW44_CHAINS` at a file
 GW44_CHAINS=my-chains.json make build PIN=11155111:0x00a9f390a6010d045e0d34856048ddd6910d25ba
 ```
 
-An owner can put the result on a domain of their own, with no dependence on a public gateway existing. Hosting instructions are not here yet: `docs/DEPLOY.md` arrives with m01-t05.
+An owner can put the result on a domain of their own, with no dependence on a public gateway existing. What the host has to do is serve those three files over HTTPS and answer every unknown path with `index.html` — on GitHub Pages, `404.html` already does this. No wildcard DNS and no wildcard certificate are needed, because one pinned deployment is one hostname.
 
 **`make verify` is the one target that reaches a live chain**, and it is not part of `make check` and not in CI. It reads the fixture contract on Sepolia and Base Sepolia through the endpoints in [`chains.json`](chains.json), decodes the ABI with `cast` and shell arithmetic rather than with anything under `src/`, and compares both hashes with what `tools/get.ts` serves; it finishes by loading the document in headless Chromium. So it needs the network and those two chains reachable. `VERIFY_CHAINS` and `VERIFY_ADDRESS` override what it checks, and `VERIFY_STATUS` the status an ERC-5219 resource must answer. It checks the pinned build too: per chain, the same bytes resolved through a pin from a URL that names no contract, and the pinned document loaded in a browser on its own port.
 

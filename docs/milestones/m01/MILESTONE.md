@@ -53,6 +53,6 @@ CI, three engines, and the limits. Finishes before phase 2, since the review sho
 |:-----|:-----|:-------|
 | [m01-t04](tasks/m01-t04/TASK.md) | The pinned build: one contract at any hostname (criterion 12) | done ([#35](https://github.com/dnznlabs/gw44/pull/35)) |
 | [m01-t05](tasks/m01-t05/TASK.md) | The configuration file: one project on several chains (criterion 13); carried #11, #27 and #38 | not started |
-| m01-t06 | Two-leg security review of `src/`, findings dispositioned (criterion 10) | not started |
+| [m01-t06](tasks/m01-t06/TASK.md) | Two-leg security review of what a gateway ships, findings dispositioned (criterion 10); carried #37 | not started |
 
 Tasks run in order. `TASK.md` for m01-t03 onward is written while the task before it is being built.
